@@ -1,0 +1,12 @@
+; DO NOT EDIT (unless you know what you are doing)
+;
+; This subdirectory is a git "subrepo", and this file is maintained by the
+; git-subrepo command. See https://github.com/ingydotnet/git-subrepo#readme
+;
+[subrepo]
+	remote = https://github.com/1bl4z3r/hermit-V2
+	branch = main
+	commit = a01afdd69a7dfc2cd5c2813e2b324046f68effe6
+	parent = b4d432f7240e51681ec70caccccc997c3965a062
+	method = merge
+	cmdver = 0.4.9
