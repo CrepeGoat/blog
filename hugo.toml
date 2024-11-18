@@ -1,4 +1,7 @@
 baseURL = 'https://example.org/'
 languageCode = 'en-us'
-title = 'My New Hugo Site'
+title = "Loose Thoughts Collected"
 theme = 'hermit-v2'
+
+# more config options exemplified at
+# https://github.com/1bl4z3r/hermit-V2/blob/main/hugo.toml.example
