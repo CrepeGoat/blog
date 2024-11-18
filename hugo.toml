@@ -5,3 +5,16 @@ theme = 'hermit-v2'
 
 # more config options exemplified at
 # https://github.com/1bl4z3r/hermit-V2/blob/main/hugo.toml.example
+
+[params]
+  dateform        = "Jan 2, 2006"
+  dateformShort   = "Jan 2"
+  dateformNum     = "2006-01-02"
+  dateformNumTime = "2006-01-02 15:04 -0700"
+
+[menu]
+
+  [[menu.main]]
+    name = "Posts"
+    url = "posts/"
+    weight = 10
