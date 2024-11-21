@@ -81,7 +81,7 @@ Getting a Taipy MVP app up-and-running was fairly straight-forward; I had a coup
 
 A desirable quality for this tool is to be able to represent more complicated probability calculations, like rolled stat sums (`(4d6 drop low) x 6`) or rolling with bless (`1d20 + 1d4`). While the former requires a full arbitrary expression UI which I decided was a bad idea for the time being, the latter is just a sum of heterogeneous dice rolls. This could be implemented by having a dynamic list of individual homogeneous dice controls (e.g., inputs for die side counts, die counts, and drop counts).
 
-![TODO insert image]()
+![TODO add a little Figma mockup of the idea]()
 
 This implementation felt like a good idea because it expanded the set of possible operations to include very common use cases (e.g., roll with bless), without making the interface overly complex from either a user or coder standpoint. It seemed like the best of both worlds.
 
@@ -146,7 +146,7 @@ The first search hit directed me to [this PA guide for hosting Django apps](http
 
 I probably spent a couple hours reading about [what it is](https://peps.python.org/pep-0333/) and [how others use it](https://youtu.be/WqrCnVAkLIo?si=FtCHlP46cd6suH-S).
 
-By the end of it, I learned that I didn't want to know what it was unless I absolutely had to, and it looked like it was mostly a framework-level thing that at a framework-consumer-level I didn't have to understand. So I started looking for any other possible path to success.
+By the end of it, I learned that I didn't want to know what it was, and it looked like it was mostly a framework-level thing that at a framework-consumer-level I didn't have to understand. So I started looking for any other possible path to success.
 
 ### ❌ Taipy deployment instructions...? -> not especially helpful
 
