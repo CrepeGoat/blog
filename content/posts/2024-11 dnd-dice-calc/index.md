@@ -14,18 +14,18 @@ tags:
 
 # tl;dr: the result
 
-![TODO insert image]()
+![a demo of the app](./demo.gif)
 
 - hosted app: https://crepegoat.pythonanywhere.com/
 - code (as of writing): https://github.com/CrepeGoat/heart-of-the-dice/tree/v0.1.1
 
 # motivation
 
-About a year ago I started playing D&D in a campaign that my work friend is running. He's a brilliant creative and comedic mind that has written a lot of interesting scenarios, but at the same time is a goofy lil' goober that gives us space to have fun without taking his world too seriously; all-around he's a great DM and getting to play with him and other mutual friends has been a weekly highlight for me. Since then I've joined a second campaign with a separate friend group, and have been binging content from Dimension 20, (which btw is HI-larious).
+About a year ago I started playing D&D in a campaign that my work friend is running. He's a brilliant creative and comedic mind that has written a lot of interesting scenarios, but at the same time is a goofy lil' goober that gives us space to have fun without taking his world too seriously; all-around he's a great DM and getting to play with him and other mutual friends has been a weekly highlight for me. Since then I've joined a second campaign with a separate friend group, and have been binging content from Dimension 20 (which btw is HI-larious).
 
 This all to say: I've been consuming a lot of D&D content recently.
 
-In doing so I've found myself thinking about dice-rolling probabilities. E.g., if you roll with advantage you have a better chance of rolling high numbers, but *how much* better are your odds, exactly? What about rolling `4d6` and dropping the lowest die, like you do when rolling for your character stats; what's a "good" stat role, statistically speaking? Not only did I want answers to these questions, but I was also curious about the math for the sake of the math: how would someone calculate this?
+In doing so I've found myself thinking about dice-rolling probabilities. E.g., if you roll with advantage you have a better chance of rolling high numbers, but *how much* better are your odds, exactly? What about rolling `4d6` and dropping the lowest die, like you do when rolling for your character stats; what's a "good" stat role, statistically speaking? Not only did I want answers to these questions, but I was also curious about the math for the sake of the math: how could this be calculated?
 
 Questions in mind and free-time in hand, I decided to just make a software visualization tool to do these calculations and visualize the results.
 
