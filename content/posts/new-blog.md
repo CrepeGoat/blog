@@ -2,7 +2,7 @@
 title: "so I made a blog"
 date: 2024-11-20T18:39:22-07:00
 author: me
-draft: true
+draft: false
 toc: false
 images:
 tags: 
