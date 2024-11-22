@@ -220,4 +220,4 @@ Aside from editing the `..._wsgi.py` file and making the `venv`, there's a few o
 
 # and the beast was done
 
-And that's it! This process is what it took for me to deploy my very first web app ever. At least, that's everything from the coding side; I also did a handful of math (yusss 🤩) to get this working, which I'll write about in another post.
+And that's it! This process is more or less what it took for me to deploy my very first web app ever. At least, that's everything from the coding side; I also did a handful of math (yusss 🤩) to get this working, which I'll write about in another post.
