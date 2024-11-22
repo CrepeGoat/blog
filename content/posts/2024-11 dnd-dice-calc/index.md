@@ -81,7 +81,7 @@ Getting a Taipy MVP app up-and-running was fairly straight-forward; I had a coup
 
 A desirable quality for this tool is to be able to represent more complicated probability calculations, like rolled stat sums (`(4d6 drop low) x 6`) or rolling with bless (`1d20 + 1d4`). While the former requires a full arbitrary expression UI which I decided was a bad idea for the time being, the latter is just a sum of heterogeneous dice rolls. This could be implemented by having a dynamic list of individual homogeneous dice controls (e.g., inputs for die side counts, die counts, and drop counts).
 
-![TODO add a little Figma mockup of the idea]()
+![a little mockup of heterogeneous dice controls](mockup-hetero-dice-controls.png)
 
 This implementation felt like a good idea because it expanded the set of possible operations to include very common use cases (e.g., roll with bless), without making the interface overly complex from either a user or coder standpoint. It seemed like the best of both worlds.
 
