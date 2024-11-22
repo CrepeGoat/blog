@@ -1,9 +1,8 @@
 ---
 title: "D&D Dice Calculator"
 author: me
-date: 2024-11-21T01:05:00-07:00
-draft: true
-toc: false
+date: 2024-11-21T21:34:00-07:00
+draft: false
 images:
 tags: 
   - d&d
