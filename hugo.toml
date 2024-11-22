@@ -7,6 +7,15 @@ theme = 'hermit-v2'
 # https://github.com/1bl4z3r/hermit-V2/blob/main/hugo.toml.example
 # https://1bl4z3r.github.io/hermit-V2/en/posts/explaining-configs/
 
+[markup]
+ [markup.goldmark]
+   [markup.goldmark.extensions]
+     [markup.goldmark.extensions.passthrough]
+       enable = true
+       [markup.goldmark.extensions.passthrough.delimiters]
+         block = [['\[', '\]'], ['$$', '$$']]
+         inline = [['\(', '\)'], ['$', '$']]
+
 [params]
   dateform        = "Jan 2, 2006"
   dateformShort   = "Jan 2"
@@ -16,6 +25,8 @@ theme = 'hermit-v2'
   homeSubtitle = "Becker Awqatty's public brainscape"
   gitUrl = "https://github.com/CrepeGoat/blog/tree/main"
   enableGitInfo = true
+  global_mathjax = true
+  math = true
 
   readTime = true
   shareSocial = true
