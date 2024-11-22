@@ -186,6 +186,8 @@ application = app_gui.get_flask_app()
 
 *(...huh... I remember this code being longer and more complicated... 🤔)*
 
+*note - I removed a chunk of code using `sys.path` to make my app code importable, but I didn't need it because I made a `setup.py` for my code!*
+
 ### ✅ not enough disk space to install Taipy -> install it in pieces
 
 The first step in the Django deployment instructions was to upload your code. So I cracked open their interactive bash terminal and did the ol' `git clone --depth=1 [MY_PROJECT]`. E-Z-P-Z-BAE-B 🤙
