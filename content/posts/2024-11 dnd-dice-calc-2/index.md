@@ -91,14 +91,21 @@ class SequenceWithOffset:
         elif len(other.seq) == 0:
             return self.copy()
         index_low = min(self.offset, other.offset)
-        index_high = max(self._index_end(), other._index_end())
+        index_high = max(
+            self.offset + len(self.seq),
+            other.offset + len(other.seq),
+        )
 
         seq = np.zeros(
             index_high - index_low,
-            dtype=(self.seq[0] + other.seq[0]).dtype,
+            dtype=(self.seq[:0] + other.seq[:0]).dtype,
         )
-        seq[self.offset - index_low : self._index_end() - index_low] = self.seq
-        seq[other.offset - index_low : other._index_end() - index_low] += other.seq
+        seq[
+            self.offset - index_low : self.offset + len(self.seq) - index_low
+        ] = self.seq
+        seq[
+            other.offset - index_low : other.offset + len(other.seq) - index_low
+        ] += other.seq
 
         return SequenceWithOffset(seq=seq, offset=index_low)
 ```
@@ -132,7 +139,7 @@ There are a couple of advantages to doing this:
 
 1. Intermediate computations are all performed on integers instead of floating-point numbers. This means
     - there's no rounding errors that can accumulate through the computation,
-    - each computer-stored number can store more information (64-bit floating-point numbers only have 52 bits of decimal-point precision), and
+    - each computer-stored number can store more information (64-bit floating-point numbers only [have 53 bits of storage for digits](https://en.wikipedia.org/wiki/Double-precision_floating-point_format#IEEE_754_double-precision_binary_floating-point_format:_binary64)), and
     - any resulting values that are too large to store will generally trigger [a hardware-implemented error flag](https://en.wikipedia.org/wiki/Integer_overflow#Flags) that [is easier to respond to](https://doc.rust-lang.org/std/primitive.i64.html#method.checked_add).
 1. It makes recursive calculations simpler. I'll discuss what I mean by this later on.
 
@@ -156,6 +163,13 @@ f(x) = \begin{cases}
 \end{cases}
 $$
 
+which could be implemented in Python in linear time \(O(n)\) like so:
+
+```python
+def roll_1dn(n: int) -> SequenceWithOffset:
+    return SequenceWithOffset(seq=np.ones(n, dtype=np.uint64), offset=1)
+```
+
 Visualized, the plot for e.g. `1d6` looks like this:
 
 ![Plot for OCF of 1d6](plot-1d6.png)
@@ -166,7 +180,40 @@ Not super exciting, but definitions aren't really supposed to be.
 
 For multiple dice, we can use the convolution operation mentioned above. Specifically, we can compose the OCF for `kdn` by convolving together the OCF of `1dn` with itself `k` times.
 
-As a matter of fact, convolution is such a commonly-used operation that NumPy has a builtin convolution function. 
+A simple Python function for calculating `kdn` might look like this:
+
+```python
+def roll_kdn(k: int, n: int) -> SequenceWithOffset:
+    _1dn = roll_1dn(n)
+    result = SequenceWithOffset(seq=np.array([], dtype=np.uint64), offset=0)
+
+    for _ in range(k):
+        result = result.convolve(_1dn)
+
+    return result
+```
+
+A more sophisticated algorithm can leverage the binary representation of `k` to perform fewer convolutions. Specifically, the previous algorithm computed `1dn` auto-convolved `k` times, which required \(k\) convolutions. Instead, we can compute auto-convolutions of `1dn` for all powers of two up to `k`, then convolve the subset of those results whose powers of two sum to `k`. This involves only \(\log_2(k)\) convolutions to compute the auto-convolutions, and another at most \(\log_2(k)\) convolutions to get the final result. Such an algorithm in Python might look like this:
+
+```python
+import numpy as np
+
+def roll_kdn(k: int, n: int) -> SequenceWithOffset:
+    # Calculate auto-convolutions at powers of two
+    auto_convs = [roll_1dn(n)]
+    for _ in range(1, k.bit_length()):
+        prev = auto_convs[-1]
+        auto_convs.append(prev.convolve(prev))
+
+    # Calculate result from auto-convolutions
+    result = SequenceWithOffset(seq=np.array([], dtype=np.uint64), offset=0)
+    for i in range(k.bit_length):
+        if k & (1 << i) == 0:
+            continue
+        result = result.convolve(auto_convs[i])
+
+    return result
+```
 
 ## rolling `kdn` and dropping the lowest die
 
