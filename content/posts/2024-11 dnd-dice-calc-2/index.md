@@ -1,7 +1,7 @@
 ---
 title: "D&D Dice Calculator - Math & Malice"
 author: me
-date: 2024-11-19T15:09:18-07:00
+date: 2024-11-26T00:14:00-05:00
 draft: true
 toc: false
 images:
@@ -110,11 +110,11 @@ class SequenceWithOffset:
         return SequenceWithOffset(seq=seq, offset=index_low)
 ```
 
-Re: runtime complexity - unfortunately the docs aren't super clear, so I'm left to either read the source code (this is for fun I don't wanna) or guess.
+Re: runtime complexity - unfortunately the docs aren't super clear, so I'm left to either read the source code (this is for fun I don't wanna) or guess. [Some research](https://fse.studenttheses.ub.rug.nl/25184/1/bCS_2021_GhidirimschiN.pdf.pdf) makes guessing a little easier:
 
-- From some external research it seems that a naive algorithm would run in \(O(n_1 n_2)\) time.
-- There are other algorithms ([Karatsuba @ \(O(n^{1.58})\)](https://en.wikipedia.org/wiki/Karatsuba_algorithm), [Tom-Cook @ \(O(n^{1.46})\)](https://en.wikipedia.org/wiki/Toom–Cook_multiplication)) that have large coefficients that might be impractical for typical NumPy users.
-- There's also [a method for convolution that involves FFT's](https://docs.scipy.org/doc/scipy-1.14.1/reference/generated/scipy.signal.fftconvolve.html), but since that only works on floating-point data I elected not to use it.
+- A naive algorithm would run in \(O(n_1 n_2)\) time.
+- There are other algorithms with better asymptotic performance ([Karatsuba @ \(O(n^{1.58})\)](https://en.wikipedia.org/wiki/Karatsuba_algorithm), [Toom-Cook 3 @ \(O(n^{1.46})\)](https://en.wikipedia.org/wiki/Toom–Cook_multiplication)), but they also have large coefficients that might be impractical for typical NumPy users.
+- There's also [a method for convolution that involves FFT's](https://docs.scipy.org/doc/scipy-1.14.1/reference/generated/scipy.signal.fftconvolve.html) which runs in \(O(n\log n)\) time, but since that only works on floating-point data I elected not to use it.
 
 -> Moving forward I'll assume \(O(n^2)\) time complexity for this function.
 
@@ -124,7 +124,7 @@ One small change in perspective I want to implement here: instead of thinking in
 
 So for example, let's consider the `2d6` case. There are \(6 \times 6 = 36\) different possible *outcomes*. The *events* we want to consider are the possible sums resulting from any of these 36 different outcomes; for `2d6` there are \(11\) such different events, which include all the integers from \(2\) (realized by rolling two \(1\)'s) to \(12\) (realized by rolling two \(6\)'s).
 
-Now let's say we're interested in how we might roll the value \(5\). There are 4 ways to roll a \(5\): \({(1, 4), (2, 3), (3, 2), (4, 1)}\).
+Now let's say we're interested in how we might roll the value \(5\). There are 4 outcomes that result in a \(5\): \({(1, 4), (2, 3), (3, 2), (4, 1)}\).
 
 - in terms of *probability*, there is a \(\frac{4}{36}\) chance of rolling a \(5\) (assuming fair dice).
 - in terms of *outcome counts*, there are 4 outcomes that result in a roll of \(5\): \({(1, 4), (2, 3), (3, 2), (4, 1)}\) are those outcomes.
@@ -139,7 +139,7 @@ There are a couple of advantages to doing this:
 
 1. Intermediate computations are all performed on integers instead of floating-point numbers. This means
     - there's no rounding errors that can accumulate through the computation,
-    - each computer-stored number can store more information (64-bit floating-point numbers only [have 53 bits of storage for digits](https://en.wikipedia.org/wiki/Double-precision_floating-point_format#IEEE_754_double-precision_binary_floating-point_format:_binary64)), and
+    - each computer-stored number can store more information (64-bit floating-point numbers only [have 53 bits of storage for digits](https://en.wikipedia.org/wiki/Double-precision_floating-point_format#IEEE_754_double-precision_binary_floating-point_format:_binary64) -> I would get more precision with a 64-bit integer), and
     - any resulting values that are too large to store will generally trigger [a hardware-implemented error flag](https://en.wikipedia.org/wiki/Integer_overflow#Flags) that [is easier to respond to](https://doc.rust-lang.org/std/primitive.i64.html#method.checked_add).
 1. It makes recursive calculations simpler. I'll discuss what I mean by this later on.
 
@@ -206,14 +206,46 @@ def roll_kdn(k: int, n: int) -> SequenceWithOffset:
         auto_convs.append(prev.convolve(prev))
 
     # Calculate result from auto-convolutions
-    result = SequenceWithOffset(seq=np.array([], dtype=np.uint64), offset=0)
-    for i in range(k.bit_length):
-        if k & (1 << i) == 0:
+    result = SequenceWithOffset(seq=np.array([1], dtype=np.uint64), offset=0)
+    for i, auto_conv in enumerate(k.bit_length):
+        ith_bit = k & (1 << i)
+        if ith_bit == 0:
             continue
-        result = result.convolve(auto_convs[i])
+        result = result.convolve(auto_conv)
 
     return result
 ```
+
+Below are some examples of what this looks like for a couple different \(k\) values:
+
+![Plot for OCF of 2d6](plot-2d6.png)
+
+![Plot for OCF of 3d6](plot-3d6.png)
+
+Re: time complexity of this algorithm:
+- the length of each auto-convolution array, for a given number of convolutions \(2^i \leq k\), is \(2^i \cdot (n-1) + 1 = O(kn)\)
+- calculating the auto-convolutions takes time:
+  $$
+  O \left( \sum_i (kn)^2 \right) \\
+  = O \left(k^2 n^2 \left(1 + \frac14 + \frac1{16} + ...\right)\right) \\
+  = O(k^2 n^2)
+  $$
+- the cumulative result after the \(k\)th step is (at most) the first \(k\) auto-convolutions convolved together
+- the length of the cumulative result array after the \(j\)th step, where \(2^j \leq k\), is (at most) the sum of the lengths minus \(1\) for each convolution operation:
+  $$
+  \left( \sum_{i \leq j} 2^i \cdot (n-1) \right) + 1 \\
+  = (n-1) \sum_{i \leq j} 2^i + 1 \\
+  = (n-1) (2^{j+1} - 1) + 1 \\
+  = O(nk)
+  $$
+- calculating all cumulative results, and thus the final result, takes time:
+  $$
+  O \left( \sum_j (kn)^2 \right) \\
+  = O \left(k^2 n^2 \left(1 + \frac14 + \frac1{16} + ...\right)\right) \\
+  = O(k^2 n^2)
+  $$
+
+*Lingering thought: I chose a scheme for convolution that reduced the number of convolution operations from \(O(k)\) to \(O(\log(k))\). But the convolutions themselves take different amounts of time, so this isn't necessarily optimal. Is there a more efficient way to calculate this result? Is the "naive" algorithm actually slower?*
 
 ## rolling `kdn` and dropping the lowest die
 
