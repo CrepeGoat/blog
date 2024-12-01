@@ -300,7 +300,7 @@ Ahhhh. Finally. We get to the content that made me want to do this in the first 
 
 To calculate this, I need to be able to map all of the outcomes to specific score events. But I can't just use the result that our previous function `roll_kdn` would generate, because not all of the outcomes in a specific `kdn` event will map to the same `kdn drop highest` event.
 
-For example, if I'm calculating `2d6 drop highest`, it would be tempting to try to call `roll_kdn(k=2, n=6)`, and use those results to make the return values. But in `2d6`, e.g. both of the outcomes \((1, 4)\) and \((2, 3)\) would be in the \(5\) score event, but in `2d6 drop highest` they would both count towards different score events, specifically \(1\) and \(2\), respectively. And since I'm not storing the actual outcomes themselves, just the number of outcomes for each score event, how will I know how to reassign counts from `2d6` to `2d6 drop lowest`?
+For example, if I'm calculating `2d6 drop highest`, it would be tempting to try to call `roll_kdn(k=2, n=6)`, and use those outcome counts to make the new outcome counts. But in `2d6`, e.g. both of the outcomes \((1, 4)\) and \((2, 3)\) would be in the \(5\) score event, but in `2d6 drop highest` they would both count towards different score events, specifically \(1\) and \(2\), respectively. And since I'm not storing the actual outcomes themselves, just the number of outcomes for each score event, how would I know how to reassign counts from `2d6` to `2d6 drop lowest`?
 
 So afaik, calculating `kdn drop highest` (and `drop highest`) with convolutions only works by breaking the problem down into a bunch of smaller sub-problem distributions, calculating those OCF's, and element-wise summing all of the smaller OCF's together. The trick is how to come up with the sub-problems.
 
@@ -310,27 +310,30 @@ To make this a little more tangible, I'm going to work through a specific exampl
 
 For our tangible example, let's specifically consider \(k=3\) and \(n=4\).
 
-I want to individually consider the different events for how the largest dice value, e.g. \(4\), does or does not get rolled, and what score distributions correspond to those events. Specifically, I want to separately consider the following partition of events:
+For our sub-problems, I want to individually consider the different events for how the largest dice value, e.g. \(4\), does or does not get rolled, and what score distributions correspond to those events. From those sub-distributions, I can re-map the scores to drop the highest value (i.e., \(4\)) and re-collect them into the final distribution.
+
+Specifically, I want to separately consider the following partition of events:
 
 1. all three dice roll a \(4\):
-    - there is exactly one outcome for this event - \((4, 4, 4)\)
+    - *(there is exactly one outcome for this event - \((4, 4, 4)\))*
     - one of the \(4\)'s gets dropped from the score
-    - the other two \(4\)'s are kept in the score, resulting in the single-outcome distribution `8`
+    - the other two \(4\)'s are kept in the score
+    - -> the result is the single-event distribution `8`
 1. exactly two of the dice (i.e., the first and second, the second and third, or the first and third) roll a \(4\), and the remaining one die rolls a lower number between \(1\) and \(3\):
     - one of the \(4\)'s gets dropped from the score
     - one of the \(4\)'s is kept in the score
     - the other remaining die kept in the score rolls less than a \(4\), so it is effectively a `d3` 
-    - -> the score is effectively `1d3 + 4`
+    - -> the distribution is effectively that of `1d3 + 4`
 1. exactly one die (i.e., the first, second, or third) rolled a \(4\), and the others rolled any other lower number between \(1\) and \(3\):
     - the \(4\) gets dropped from the score
     - the remaining die roll less than \(4\), so they are both effectively `d3`'s
-    - -> the remaining result is effectively `2d3`
+    - -> the scored result is effectively `2d3`
 1. the remaining possibilities (which doesn't quite fit the prompt) is that *none* of the dice are \(4\)'s
     - all dice roll less than \(4\), so they are effectively each a `d3`
     - no dice has been designated to be dropped
     - -> this is effectively the same as `3d3 drop highest`
 
-Note that the one-die and two-dice cases each have three unique orderings, while the 0-die and 3-dice cases each have one ordering. More generally, the number of orderings for a given number of high dice \(i\) is [\(k\)-choose-\(i\)](https://en.wikipedia.org/wiki/Binomial_coefficient), or \(k \choose i\).
+Note that the 1-die and 2-dice cases each have three unique orderings, while the 0-die and 3-dice cases each have one ordering. More generally, the number of orderings for a given number of fixed high dice \(i\) is [\(k\)-choose-\(i\)](https://en.wikipedia.org/wiki/Binomial_coefficient), or \(k \choose i\).
 
 Altogether, if we write the OCF of a distribution \(d\) as \(f_d\), then we can recursively express the OCF of `3d4 drop highest` as follows:
 
@@ -344,11 +347,9 @@ f_{3d4 \text{ drop highest}} (x)
 \end{align}
 $$
 
-As
-
 ### back to the general case, `kdn drop highest`
 
-For the general case of dropping the highest die (when there is more than one die, i.e. \(k > 1\), and the die has multiple outcomes, i.e. \(n > 1\)), we can formulate an equation similar to the `3d4 drop highest` case:
+For the general case of dropping the highest die (specifically for the non-trivial cases, i.e. when there is more than one die \(k > 1\), and the die has multiple outcomes \(n > 1\)), we can formulate an equation similar to the `3d4 drop highest` case:
 
 $$
 f_{kdn \text{ drop highest}} (x) \\
@@ -357,7 +358,7 @@ f_{kdn \text{ drop highest}} (x) \\
 $$
 
 However, since this is a recursive definition, we have to define the end conditions, of which there happen to be two:
-- when \(k = 1\) - if we roll one die and drop "the highest", it's the same as rolling no dice: 
+- when \(k = 1\) - if we roll one die and drop "the highest" (a.k.a. "the only"), it's the same as rolling no dice: 
 $$
 f_{1dn \text{ drop highest}} (x) \\
 = f_{0} (x) \\
@@ -366,7 +367,7 @@ f_{1dn \text{ drop highest}} (x) \\
     0 & \text{otherwise} \\
 \end{cases}
 $$
-- and when \(n = 1\) - if all die can only roll a \(1\), then rolling \(k\) dice and dropping "the highest" should always result in the same value, i.e. \(k-1\):
+- and when \(n = 1\) - if all dice can only roll a \(1\), then rolling \(k\) dice and dropping "the highest" should always result in the same value, i.e. \(k-1\):
 $$
 f_{kd1 \text{ drop highest}} (x) \\
 = f_{k-1} (x) \\
@@ -398,23 +399,24 @@ def roll_kdn_drop_highest(k: int, n: int):
 
 Because the function is recursive, the time complexity is a little tricky to evaluate.
 
-Let \(O(C(k, n))\) be the time complexity of this algorithm. Like the function itself, the complexity can also be expressed recursively:
+Let \(O(C(k, n))\) be the time complexity of this algorithm. Like the function itself, the complexity can also be expressed recursively, as follows (ignoring the dominated linear-time operations like element-wise multiplication and array consolidation/element-wise addition):
 
 $$
 \begin{align}
-O(C(k, n)) :&= O\left( C(k-1, n) + \sum_i^{k-1} i^2 (n-1)^2 \right) \\
-    &= O\left( C(k-1, n) + (n-1)^2 \sum_i^{k-1} i^2 \right) \\
-    &= O\left( C(k-1, n) + n^2 k^3 \right) \\
-    &= O\left( \left( C(k-2, n) + {(k-1)}^3 n^2 \right) + k^3 n^2 \right) \\
-    &= O\left( ... + {(k-2)}^3 n^2 + {(k-1)}^3 n^2 + k^3 n^2 \right) \\
-    &= O\left( \sum_i^k i^3 n^2 \right) \\
-    &= O\left( n^2 \sum_i^k i^3 \right) \\
-    &= O\left( n^2 k^4 \right) \\
+O(C(k, n)) :&= O\left( C(k, n-1) + \sum_{i=1}^{k-1} i^2 (n-1)^2 \right) \\
+    &= O\left( C(k, n-1) + (n-1)^2 \sum_{i=1}^{k-1} i^2 \right) \\
+    &= O\left( C(k, n-1) + n^2 k^3 \right) \\
+    \textit{apply def. of } C(k, n-1) \rightarrow &= O\left( \left( C(k, n-2) + k^3 {(n-1)}^2 \right) + k^3 n^2 \right) \\
+    \textit{repeatedly apply def. of } C(k, n-j) \rightarrow &= O\left( ... + k^3 {(n-2)}^2 + k^3 {(n-1)}^2 + k^3 n^2 \right) \\
+    &= O\left( k^3 \sum_{j=1}^n {(n-j)}^3 \right) \\
+    &= O\left( k^3 n^3 \right) \\
 \end{align}
 $$
 
--> **the time complexity is \(O(k^4 n^2)\)**
+-> **the time complexity is \(O(k^3 n^3)\)**
 
 ### calculate all sub-distributions in advance
+
+In 
 
 ## rolling `kdn` and dropping the highest `m` dice
