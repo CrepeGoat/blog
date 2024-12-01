@@ -58,7 +58,14 @@ Before getting into the math, I want to make sure readers understand some fundam
 - an [*event*](https://en.wikipedia.org/wiki/Event_(probability_theory)) is a collection of outcomes. E.g., rolling an even number on a `d6` is an event, which is a collection of the outcomes \({2, 4, 6}\).
 - a [*probability distribution*](https://en.wikipedia.org/wiki/Probability_distribution) (or in the case of dice rolls specifically, a [*probability mass function (PMF)*](https://en.wikipedia.org/wiki/Probability_mass_function)) is a mathematical function that takes as input a possible outcome / event, and outputs how probable it is for that result to be realized.
 
-  For example, if a coin had a 55% change to land on heads when flipped (and a 45% of the same for tails), the PMF \(f\) would be defined as \(f(\text{heads}) := 0.55\),  \(f(\text{tails}) := 0.45\), \(f(\text{anything else}) := 0\).
+  For example, if a coin had a 55% change to land on heads when flipped (and a 45% of the same for tails), the PMF \(f\) would be defined as:
+  $$
+  \begin{array}{l}
+    f(\text{heads}) := 0.55 \\
+    f(\text{tails}) := 0.45 \\
+    f(\text{anything else}) := 0 \\
+  \end{array}
+  $$
 - [convolution](https://en.wikipedia.org/wiki/Convolution) is a mathematical operation that (in this case) takes as input two distributions, and as output generates a third distribution. In this case, we'll use convolution to [calculate the distribution for the sum of two experiments](https://en.wikipedia.org/wiki/Convolution_of_probability_distributions) (e.g., `2d6` = `1d6` + `1d6`).
 
 ## implementing convolution
@@ -113,10 +120,11 @@ class SequenceWithOffset:
 Re: runtime complexity - unfortunately the docs aren't super clear, so I'm left to either read the source code (this is for fun I don't wanna) or guess. [Some research](https://fse.studenttheses.ub.rug.nl/25184/1/bCS_2021_GhidirimschiN.pdf.pdf) makes guessing a little easier:
 
 - A naive algorithm would run in \(O(n_1 n_2)\) time.
-- There are other algorithms with better asymptotic performance ([Karatsuba @ \(O(n^{1.58})\)](https://en.wikipedia.org/wiki/Karatsuba_algorithm), [Toom-Cook 3 @ \(O(n^{1.46})\)](https://en.wikipedia.org/wiki/Toom–Cook_multiplication)), but they also have large coefficients that might be impractical for typical NumPy users.
+- The [Karatsuba algorithm](https://en.wikipedia.org/wiki/Karatsuba_algorithm) runs in \(O(n^{1.58})\) time, and doesn't seem to have other obvious implementation constraints.
+- There are other algorithms with better asymptotic performance (e.g. [Toom-Cook 3 @ \(O(n^{1.46})\)](https://en.wikipedia.org/wiki/Toom–Cook_multiplication)), but they also have large coefficients that might be impractical for typical NumPy users.
 - There's also [a method for convolution that involves FFT's](https://docs.scipy.org/doc/scipy-1.14.1/reference/generated/scipy.signal.fftconvolve.html) which runs in \(O(n\log n)\) time, but since that only works on floating-point data I elected not to use it.
 
--> Moving forward I'll assume \(O(n^2)\) time complexity for this function.
+-> Moving forward I'll assume \(O(n^2)\) time complexity for this function, but know that this may not be the true complexity depending on implementation specifics.
 
 ## probabilities vs. outcomes
 
@@ -135,13 +143,16 @@ Now let's say we're interested in how we might roll the value \(5\). There are 4
 
 So when calculating probability distributions, I want to **first calculate an outcome-count function (OCF), and then convert that into a probability mass function (PMF) using the above equation on each event value**.
 
-There are a couple of advantages to doing this:
+There are a handful of advantages to doing this:
 
 1. Intermediate computations are all performed on integers instead of floating-point numbers. This means
     - there's no rounding errors that can accumulate through the computation,
     - each computer-stored number can store more information (64-bit floating-point numbers only [have 53 bits of storage for digits](https://en.wikipedia.org/wiki/Double-precision_floating-point_format#IEEE_754_double-precision_binary_floating-point_format:_binary64) -> I would get more precision with a 64-bit integer), and
     - any resulting values that are too large to store will generally trigger [a hardware-implemented error flag](https://en.wikipedia.org/wiki/Integer_overflow#Flags) that [is easier to respond to](https://doc.rust-lang.org/std/primitive.i64.html#method.checked_add).
+1. It allows us to make some simple correctness checks. Specifically, rolling \(k\) \(n\)-sided dice always yields \(n^k\) outcomes, so any outcome-count distribution generated from rolling \(k\) \(n\)-sided dice must sum to \(n^k\) too. And if it doesn't, then the calculation must be wrong in some way.
 1. It makes recursive calculations simpler. I'll discuss what I mean by this later on.
+
+The downside is that it can't be used to represent unfair dice, but I'm not concerned with unfair dice here, so that drawback is moot.
 
 # calculations
 
@@ -185,7 +196,7 @@ A simple Python function for calculating `kdn` might look like this:
 ```python
 def roll_kdn(k: int, n: int) -> SequenceWithOffset:
     _1dn = roll_1dn(n)
-    result = SequenceWithOffset(seq=np.array([], dtype=np.uint64), offset=0)
+    result = SequenceWithOffset(seq=np.array([1], dtype=np.uint64), offset=0)
 
     for _ in range(k):
         result = result.convolve(_1dn)
@@ -193,7 +204,34 @@ def roll_kdn(k: int, n: int) -> SequenceWithOffset:
     return result
 ```
 
-A more sophisticated algorithm can leverage the binary representation of `k` to perform fewer convolutions. Specifically, the previous algorithm computed `1dn` auto-convolved `k` times, which required \(k\) convolutions. Instead, we can compute auto-convolutions of `1dn` for all powers of two up to `k`, then convolve the subset of those results whose powers of two sum to `k`. This involves only \(\log_2(k)\) convolutions to compute the auto-convolutions, and another at most \(\log_2(k)\) convolutions to get the final result. Such an algorithm in Python might look like this:
+The time complexity for this algorithm depends on how long each convolution takes, which depends on the lengths of the intermediate resulting arrays:
+- the length of the original array is \(n\)
+- the length of each array convolved with itself \(i\) times is \(i(n-1) + 1\)
+- the time complexity for convolving a length-\(n\) array with a length-\((i-1)(n-1) + 1\) array is \(O(i n^2)\)
+- the time complexity for calculating all auto-convolutions is:
+  $$
+  \begin{array}{l}
+  O(\sum_i^k i n^2) \\
+  = O(n^2 \sum_i^k i) \\
+  = O(k^2 n^2) \\
+  \end{array}
+  $$
+
+Below are some examples of what this looks like for a couple different \(k\) values:
+
+![Plot for OCF of 2d6](plot-2d6.png)
+
+![Plot for OCF of 3d6](plot-3d6.png)
+
+And again, to convert this OCF to a PMF we need to know the total number of outcomes possible. Since there are \(k\) dice involved and each die has \(n\) outcomes of its own, the number of total outcomes is the product of those individual totals, \(n^k\).
+
+### ❌ fewer convolutions doesn't actually make it faster
+
+A more sophisticated algorithm can leverage the binary representation of `k` to perform fewer convolutions. Specifically, the previous algorithm computed `1dn` auto-convolved `k` times, which required \(k-1\) convolutions. Instead, we can compute auto-convolutions of `1dn` for all powers of two up to `k`, then convolve the subset of those results whose powers of two sum to `k`. This involves only \(\log_2(k)\) convolutions to compute the auto-convolutions, and another at most \(\log_2(k)\) convolutions to get the final result.
+
+*(Ftr I didn't invent this myself; I've seen this trick used for other types of numerical calculations in other contexts.)*
+
+Such an algorithm in Python might look like this:
 
 ```python
 import numpy as np
@@ -206,7 +244,7 @@ def roll_kdn(k: int, n: int) -> SequenceWithOffset:
         auto_convs.append(prev.convolve(prev))
 
     # Calculate result from auto-convolutions
-    result = SequenceWithOffset(seq=np.array([1], dtype=np.uint64), offset=0)
+    result = SequenceWithOffset(seq=np.ones(1, dtype=np.uint64), offset=0)
     for i, auto_conv in enumerate(k.bit_length):
         ith_bit = k & (1 << i)
         if ith_bit == 0:
@@ -216,37 +254,167 @@ def roll_kdn(k: int, n: int) -> SequenceWithOffset:
     return result
 ```
 
-Below are some examples of what this looks like for a couple different \(k\) values:
-
-![Plot for OCF of 2d6](plot-2d6.png)
-
-![Plot for OCF of 3d6](plot-3d6.png)
-
 Re: time complexity of this algorithm:
-- the length of each auto-convolution array, for a given number of convolutions \(2^i \leq k\), is \(2^i \cdot (n-1) + 1 = O(kn)\)
+- the length of each auto-convolution array, for a given number of convolutions \(2^i \leq k\), is:
+  $$
+  \begin{array}{l}
+  2^i \cdot (n-1) + 1 \\
+  = O(kn)
+  \end{array}
+  $$
 - calculating the auto-convolutions takes time:
   $$
-  O \left( \sum_i (kn)^2 \right) \\
-  = O \left(k^2 n^2 \left(1 + \frac14 + \frac1{16} + ...\right)\right) \\
-  = O(k^2 n^2)
+  \begin{array}{l}
+  O \left( \sum_i (2^i n)^2 \right) \\
+  = O \left(n^2 \sum_i 4^i \right) \\
+  = O \left(n^2 k^2 \left(1 + \frac14 + \frac1{16} + ...\right)\right) \\
+  = O(n^2 k^2)
+  \end{array}
   $$
-- the cumulative result after the \(k\)th step is (at most) the first \(k\) auto-convolutions convolved together
+- the cumulative result after the \(k\)th step is (at most) the first \(k\) auto-convolutions convolved together.
 - the length of the cumulative result array after the \(j\)th step, where \(2^j \leq k\), is (at most) the sum of the lengths minus \(1\) for each convolution operation:
   $$
+  \begin{array}{l}
   \left( \sum_{i \leq j} 2^i \cdot (n-1) \right) + 1 \\
   = (n-1) \sum_{i \leq j} 2^i + 1 \\
   = (n-1) (2^{j+1} - 1) + 1 \\
   = O(nk)
+  \end{array}
   $$
 - calculating all cumulative results, and thus the final result, takes time:
   $$
+  \begin{array}{l}
   O \left( \sum_j (kn)^2 \right) \\
   = O \left(k^2 n^2 \left(1 + \frac14 + \frac1{16} + ...\right)\right) \\
   = O(k^2 n^2)
+  \end{array}
   $$
 
-*Lingering thought: I chose a scheme for convolution that reduced the number of convolution operations from \(O(k)\) to \(O(\log(k))\). But the convolutions themselves take different amounts of time, so this isn't necessarily optimal. Is there a more efficient way to calculate this result? Is the "naive" algorithm actually slower?*
+-> the overall time complexity is \(O(k^2 n^2)\)
 
-## rolling `kdn` and dropping the lowest die
+This happens to have the same complexity as the simpler algorithm above, even though this algorithm uses fewer convolution operations.
 
-## rolling `kdn` and dropping the lowest `m` dice
+## rolling `kdn` and dropping the highest die
+
+Ahhhh. Finally. We get to the content that made me want to do this in the first place ☺️
+
+To calculate this, I need to be able to map all of the outcomes to specific score events. But I can't just use the result that our previous function `roll_kdn` would generate, because not all of the outcomes in a specific `kdn` event will map to the same `kdn drop highest` event.
+
+For example, if I'm calculating `2d6 drop highest`, it would be tempting to try to call `roll_kdn(k=2, n=6)`, and use those results to make the return values. But in `2d6`, e.g. both of the outcomes \((1, 4)\) and \((2, 3)\) would be in the \(5\) score event, but in `2d6 drop highest` they would both count towards different score events, specifically \(1\) and \(2\), respectively. And since I'm not storing the actual outcomes themselves, just the number of outcomes for each score event, how will I know how to reassign counts from `2d6` to `2d6 drop lowest`?
+
+So afaik, calculating `kdn drop highest` (and `drop highest`) with convolutions only works by breaking the problem down into a bunch of smaller sub-problem distributions, calculating those OCF's, and element-wise summing all of the smaller OCF's together. The trick is how to come up with the sub-problems.
+
+To make this a little more tangible, I'm going to work through a specific example.
+
+### rolling `3d4 drop highest`
+
+For our tangible example, let's specifically consider \(k=3\) and \(n=4\).
+
+I want to individually consider the different events for how the largest dice value, e.g. \(4\), does or does not get rolled, and what score distributions correspond to those events. Specifically, I want to separately consider the following partition of events:
+
+1. all three dice roll a \(4\):
+    - there is exactly one outcome for this event - \((4, 4, 4)\)
+    - one of the \(4\)'s gets dropped from the score
+    - the other two \(4\)'s are kept in the score, resulting in the single-outcome distribution `8`
+1. exactly two of the dice (i.e., the first and second, the second and third, or the first and third) roll a \(4\), and the remaining one die rolls a lower number between \(1\) and \(3\):
+    - one of the \(4\)'s gets dropped from the score
+    - one of the \(4\)'s is kept in the score
+    - the other remaining die kept in the score rolls less than a \(4\), so it is effectively a `d3` 
+    - -> the score is effectively `1d3 + 4`
+1. exactly one die (i.e., the first, second, or third) rolled a \(4\), and the others rolled any other lower number between \(1\) and \(3\):
+    - the \(4\) gets dropped from the score
+    - the remaining die roll less than \(4\), so they are both effectively `d3`'s
+    - -> the remaining result is effectively `2d3`
+1. the remaining possibilities (which doesn't quite fit the prompt) is that *none* of the dice are \(4\)'s
+    - all dice roll less than \(4\), so they are effectively each a `d3`
+    - no dice has been designated to be dropped
+    - -> this is effectively the same as `3d3 drop highest`
+
+Note that the one-die and two-dice cases each have three unique orderings, while the 0-die and 3-dice cases each have one ordering. More generally, the number of orderings for a given number of high dice \(i\) is [\(k\)-choose-\(i\)](https://en.wikipedia.org/wiki/Binomial_coefficient), or \(k \choose i\).
+
+Altogether, if we write the OCF of a distribution \(d\) as \(f_d\), then we can recursively express the OCF of `3d4 drop highest` as follows:
+
+$$
+\begin{align}
+f_{3d4 \text{ drop highest}} (x)
+&= {3 \choose 0} f_{8} (x) \\
+    &+ {3 \choose 1} f_{1d3 + 4} (x) \\
+    &+ {3 \choose 2} f_{2d3} (x) \\
+    &+ {3 \choose 3} f_{3d3 \text{ drop highest}} (x)
+\end{align}
+$$
+
+As
+
+### back to the general case, `kdn drop highest`
+
+For the general case of dropping the highest die (when there is more than one die, i.e. \(k > 1\), and the die has multiple outcomes, i.e. \(n > 1\)), we can formulate an equation similar to the `3d4 drop highest` case:
+
+$$
+f_{kdn \text{ drop highest}} (x) \\
+= {k \choose k} f_{kd(n-1) \text{ drop highest}} (x) \\
+    + \sum_{i \in [0, k-1]} {k \choose i} f_{id(n-1) + n \cdot (k-1 -i)}
+$$
+
+However, since this is a recursive definition, we have to define the end conditions, of which there happen to be two:
+- when \(k = 1\) - if we roll one die and drop "the highest", it's the same as rolling no dice: 
+$$
+f_{1dn \text{ drop highest}} (x) \\
+= f_{0} (x) \\
+= \begin{cases}
+    1 & \text{if } x = 0 \\
+    0 & \text{otherwise} \\
+\end{cases}
+$$
+- and when \(n = 1\) - if all die can only roll a \(1\), then rolling \(k\) dice and dropping "the highest" should always result in the same value, i.e. \(k-1\):
+$$
+f_{kd1 \text{ drop highest}} (x) \\
+= f_{k-1} (x) \\
+= \begin{cases}
+    1 & \text{if } x = k-1 \\
+    0 & \text{otherwise} \\
+\end{cases}
+$$
+
+In both end cases, the OCF reduces to \(f_{k-1}\).
+
+With the equation established, we can now implement it in Python:
+
+```python
+import math
+
+def roll_kdn_drop_highest(k: int, n: int):
+    if k == 1 or n == 1:
+        return SequenceWithOffset(seq=np.ones(1, dtype=np.uint64), offset=k-1)
+
+    result = roll_kdn_drop_highest(k=k, n=n-1)
+    for i in range(k):
+        sub_result = roll_kdn(k=i, n=n-1)
+        sub_result.seq *= math.comb(k, i)
+        sub_result.offset += n * (k - 1 - i)
+        result = result.consolidate(sub_result)
+    return result
+```
+
+Because the function is recursive, the time complexity is a little tricky to evaluate.
+
+Let \(O(C(k, n))\) be the time complexity of this algorithm. Like the function itself, the complexity can also be expressed recursively:
+
+$$
+\begin{align}
+O(C(k, n)) :&= O\left( C(k-1, n) + \sum_i^{k-1} i^2 (n-1)^2 \right) \\
+    &= O\left( C(k-1, n) + (n-1)^2 \sum_i^{k-1} i^2 \right) \\
+    &= O\left( C(k-1, n) + n^2 k^3 \right) \\
+    &= O\left( \left( C(k-2, n) + {(k-1)}^3 n^2 \right) + k^3 n^2 \right) \\
+    &= O\left( ... + {(k-2)}^3 n^2 + {(k-1)}^3 n^2 + k^3 n^2 \right) \\
+    &= O\left( \sum_i^k i^3 n^2 \right) \\
+    &= O\left( n^2 \sum_i^k i^3 \right) \\
+    &= O\left( n^2 k^4 \right) \\
+\end{align}
+$$
+
+-> **the time complexity is \(O(k^4 n^2)\)**
+
+### calculate all sub-distributions in advance
+
+## rolling `kdn` and dropping the highest `m` dice
