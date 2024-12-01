@@ -154,6 +154,21 @@ There are a handful of advantages to doing this:
 
 The downside is that it can't be used to represent unfair dice, but I'm not concerned with unfair dice here, so that drawback is moot.
 
+## rolling `0dn`
+
+This is effectively the distribution for when we roll "0 dice". While this isn't practical in the real world, mathematically this gets used a lot in the upcoming calculations for recursive or iterative definitions and algorithms, so it makes sense to define it here upfront.
+
+The rationale is that rolling "0 dice" yields a single outcome \(()\), where the score value is the sum of all the individual values, which here totals to \(0\).
+
+Implementing this in Python might look like this:
+
+```python
+def roll_0dn() -> SequenceWithOffset:
+    return SequenceWithOffset(seq=np.ones(1, dtype=np.uint64), offset=0)
+```
+
+And the time complexity for generating this trivial data is constant time, \(O(1)\).
+
 # calculations
 
 And now, finally, some math 😈
@@ -196,7 +211,7 @@ A simple Python function for calculating `kdn` might look like this:
 ```python
 def roll_kdn(k: int, n: int) -> SequenceWithOffset:
     _1dn = roll_1dn(n)
-    result = SequenceWithOffset(seq=np.array([1], dtype=np.uint64), offset=0)
+    result = roll_0dn()
 
     for _ in range(k):
         result = result.convolve(_1dn)
@@ -244,7 +259,7 @@ def roll_kdn(k: int, n: int) -> SequenceWithOffset:
         auto_convs.append(prev.convolve(prev))
 
     # Calculate result from auto-convolutions
-    result = SequenceWithOffset(seq=np.ones(1, dtype=np.uint64), offset=0)
+    result = roll_0dn()
     for i, auto_conv in enumerate(k.bit_length):
         ith_bit = k & (1 << i)
         if ith_bit == 0:
@@ -294,13 +309,13 @@ Re: time complexity of this algorithm:
 
 This happens to have the same complexity as the simpler algorithm above, even though this algorithm uses fewer convolution operations.
 
-## rolling `kdn` and dropping the highest die
+## rolling `kdn drop highest`
 
 Ahhhh. Finally. We get to the content that made me want to do this in the first place ☺️
 
 To calculate this, I need to be able to map all of the outcomes to specific score events. But I can't just use the result that our previous function `roll_kdn` would generate, because not all of the outcomes in a specific `kdn` event will map to the same `kdn drop highest` event.
 
-For example, if I'm calculating `2d6 drop highest`, it would be tempting to try to call `roll_kdn(k=2, n=6)`, and use those outcome counts to make the new outcome counts. But in `2d6`, e.g. both of the outcomes \((1, 4)\) and \((2, 3)\) would be in the \(5\) score event, but in `2d6 drop highest` they would both count towards different score events, specifically \(1\) and \(2\), respectively. And since I'm not storing the actual outcomes themselves, just the number of outcomes for each score event, how would I know how to reassign counts from `2d6` to `2d6 drop lowest`?
+For example, if I'm calculating `2d6 drop highest`, it would be tempting to try to call `roll_kdn(k=2, n=6)`, and use those outcome counts to make the new outcome counts. But in `2d6`, e.g. both of the outcomes \((1, 4)\) and \((2, 3)\) would be in the \(5\) score event, but in `2d6 drop highest` they would both count towards different score events, specifically \(1\) and \(2\), respectively. And since I'm not storing the actual outcomes themselves, just the number of outcomes for each score event, how would one know how to reassign counts from `2d6` to `2d6 drop lowest`?
 
 So afaik, calculating `kdn drop highest` (and `drop highest`) with convolutions only works by breaking the problem down into a bunch of smaller sub-problem distributions, calculating those OCF's, and element-wise summing all of the smaller OCF's together. The trick is how to come up with the sub-problems.
 
@@ -397,26 +412,67 @@ def roll_kdn_drop_highest(k: int, n: int):
     return result
 ```
 
-Because the function is recursive, the time complexity is a little tricky to evaluate.
+Like the function itself, the complexity can also be expressed recursively. The non-recursive parts are:
+- the base case at `kd1` or `1dn`, which are constant time: \(O(1)\)
+- a loop from \(i=0\) to \(k-1\): \(O( \sum_{i=0}^{k-1} ... )\):
+    - calculating `kdn`: \(O(i^2 n^2)\)
+    - element-wise multiplication for \(i(n-1) + 1\) elements: \(O(in)\)
+    - `consolidate`, i.e. initialization and element-wise addition for at most \(k(n-1) + 1\) elements: \(O(kn)\)
 
-Let \(O(C(k, n))\) be the time complexity of this algorithm. Like the function itself, the complexity can also be expressed recursively, as follows (ignoring the dominated linear-time operations like element-wise multiplication and array consolidation/element-wise addition):
+Let \(O(C(k, n))\) be the time complexity of this algorithm. Then altogether the complexity would be expressed as follows:
 
 $$
 \begin{align}
-O(C(k, n)) :&= O\left( C(k, n-1) + \sum_{i=1}^{k-1} i^2 (n-1)^2 \right) \\
-    &= O\left( C(k, n-1) + (n-1)^2 \sum_{i=1}^{k-1} i^2 \right) \\
+O(C(k, n)) :&= O\left( C(k, n-1) + \sum_{i=1}^{k-1} (i^2 n^2 + in) \right) \\
+    &= O\left( C(k, n-1) + n^2 \sum_{i=1}^{k-1} i^2 \right) \\
     &= O\left( C(k, n-1) + n^2 k^3 \right) \\
     \textit{apply def. of } C(k, n-1) \rightarrow &= O\left( \left( C(k, n-2) + k^3 {(n-1)}^2 \right) + k^3 n^2 \right) \\
     \textit{repeatedly apply def. of } C(k, n-j) \rightarrow &= O\left( ... + k^3 {(n-2)}^2 + k^3 {(n-1)}^2 + k^3 n^2 \right) \\
-    &= O\left( k^3 \sum_{j=1}^n {(n-j)}^3 \right) \\
+    &= O\left( k^3 \sum_{j=1}^n {(n-j)}^2 \right) \\
     &= O\left( k^3 n^3 \right) \\
 \end{align}
 $$
 
 -> **the time complexity is \(O(k^3 n^3)\)**
 
-### calculate all sub-distributions in advance
+### calculate all sub-distributions in advance -> better performance & complexity
 
-In 
+In #kdn, we showed that it takes just as much time complexity to calculate an OCF for `kdn`, as it does to calculate all OCF's of `idn` for \(i \in [1, k]\). Doing the latter explicitly in this function is significant enough that it actually improves the overall time complexity.
+
+The new Python code might look like this:
+
+```python
+def iter_autoconv(dist: SequenceWithOffset):
+    result = roll_0dn()
+    while True:
+        yield result
+        result = result.convolve(dist)
+
+def roll_kdn_drop_highest(k: int, n: int):
+    if k == 1 or n == 1:
+        return SequenceWithOffset(seq=np.ones(1, dtype=np.uint64), offset=k-1)
+
+    result = roll_kdn_drop_highest(k=k, n=n-1)
+    for i, kdnm1 in zip(range(k), iter_autoconv(roll_1dn(n-1))):
+        sub_result = kdnm1.copy()  # reallocates a new object & numpy array
+        sub_result.seq *= math.comb(k, i)
+        sub_result.offset += n * (k - 1 - i)
+        result = result.consolidate(sub_result)
+    return result
+```
+
+... for which the new time complexity would look like this:
+
+$$
+\begin{align}
+O(C(k, n)) :&= O\left( C(k, n-1) + k^2 n^2 + \sum_{i=1}^{k-1} (in) \right) \\
+    &= O\left( C(k, n-1) + k^2 n^2 + n \sum_{i=1}^{k-1} i \right) \\
+    &= O\left( C(k, n-1) + k^2 n^2 \right) \\
+    \textit{repeatedly apply def. of } C(k, n-j) \rightarrow &= O\left( ... + k^2 {(n-2)}^2 + k^2 {(n-1)}^2 + k^2 n^2 \right) \\
+    &= O\left( k^2 \sum_{j=1}^n {(n-j)}^2 \right) \\
+    &= O\left( k^2 n^3 \right) \\
+\end{align}
+$$
+
 
 ## rolling `kdn` and dropping the highest `m` dice
