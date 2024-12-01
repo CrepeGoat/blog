@@ -130,9 +130,9 @@ Re: runtime complexity - unfortunately the docs aren't super clear, so I'm left 
 
 One small change in perspective I want to implement here: instead of thinking in terms of probability distributions, I instead want to think in terms of *outcome-count distributions*.
 
-So for example, let's consider the `2d6` case. There are \(6 \times 6 = 36\) different possible *outcomes*. The *events* we want to consider are the possible sums resulting from any of these 36 different outcomes; for `2d6` there are \(11\) such different events, which include all the integers from \(2\) (realized by rolling two \(1\)'s) to \(12\) (realized by rolling two \(6\)'s).
+So for example, let's consider the `2d6` case. There are \(6 \times 6 = 36\) different possible *outcomes*. The *events* we want to consider are the possible sums of dice values resulting from any of these 36 different outcomes; for `2d6` there are \(11\) such different events, which include all the integers from \(2\) (realized by rolling two \(1\)'s) to \(12\) (realized by rolling two \(6\)'s). I'll refer to these values as *scores*, or score values.
 
-Now let's say we're interested in how we might roll the value \(5\). There are 4 outcomes that result in a \(5\): \({(1, 4), (2, 3), (3, 2), (4, 1)}\).
+Now let's say we're interested in how we might roll the score value \(5\). There are 4 outcomes that result in a \(5\): \({(1, 4), (2, 3), (3, 2), (4, 1)}\).
 
 - in terms of *probability*, there is a \(\frac{4}{36}\) chance of rolling a \(5\) (assuming fair dice).
 - in terms of *outcome counts*, there are 4 outcomes that result in a roll of \(5\): \({(1, 4), (2, 3), (3, 2), (4, 1)}\) are those outcomes.
@@ -158,7 +158,7 @@ The downside is that it can't be used to represent unfair dice, but I'm not conc
 
 This is effectively the distribution for when we roll "0 dice". While this isn't practical in the real world, mathematically this gets used a lot in the upcoming calculations for recursive or iterative definitions and algorithms, so it makes sense to define it here upfront.
 
-The rationale is that rolling "0 dice" yields a single outcome \(()\), where the score value is the sum of all the individual values, which here totals to \(0\).
+The rationale is that rolling "0 dice" yields a single outcome \(()\), where the score value is the sum of "all the individual values", of which there are none, so this sum is \(0\).
 
 Implementing this in Python might look like this:
 
@@ -167,7 +167,7 @@ def roll_0dn() -> SequenceWithOffset:
     return SequenceWithOffset(seq=np.ones(1, dtype=np.uint64), offset=0)
 ```
 
-And the time complexity for generating this trivial data is constant time, \(O(1)\).
+... and the time complexity for generating this trivial data is constant time, \(O(1)\).
 
 # calculations
 
