@@ -305,8 +305,6 @@ Re: time complexity of this algorithm:
   \end{array}
   $$
 
--> the overall time complexity is \(O(k^2 n^2)\)
-
 This happens to have the same complexity as the simpler algorithm above, even though this algorithm uses fewer convolution operations.
 
 ## rolling `kdn drop highest`
@@ -315,9 +313,9 @@ Ahhhh. Finally. We get to the content that made me want to do this in the first 
 
 To calculate this, I need to be able to map all of the outcomes to specific score events. But I can't just use the result that our previous function `roll_kdn` would generate, because not all of the outcomes in a specific `kdn` event will map to the same `kdn drop highest` event.
 
-For example, if I'm calculating `2d6 drop highest`, it would be tempting to try to call `roll_kdn(k=2, n=6)`, and use those outcome counts to make the new outcome counts. But in `2d6`, e.g. both of the outcomes \((1, 4)\) and \((2, 3)\) would be in the \(5\) score event, but in `2d6 drop highest` they would both count towards different score events, specifically \(1\) and \(2\), respectively. And since I'm not storing the actual outcomes themselves, just the number of outcomes for each score event, how would one know how to reassign counts from `2d6` to `2d6 drop lowest`?
+For example, if I'm calculating `2d6 drop highest`, it would be tempting to try to call `roll_kdn(k=2, n=6)`, and use those outcome counts to make the new outcome counts. But in `2d6`, e.g. both of the outcomes \((1, 4)\) and \((2, 3)\) would be in the \(5\) score event, but in `2d6 drop highest` they would both count towards different score events, specifically \(1\) and \(2\), respectively. And since I'm not storing the actual outcomes themselves, just the number of outcomes for each score event, how would one know how to reassign counts from `2d6` to `2d6 drop highest`?
 
-So afaik, calculating `kdn drop highest` (and `drop highest`) with convolutions only works by breaking the problem down into a bunch of smaller sub-problem distributions, calculating those OCF's, and element-wise summing all of the smaller OCF's together. The trick is how to come up with the sub-problems.
+So afaik, calculating `kdn drop highest` (and `drop lowest`) with convolutions only works by breaking the problem down into a bunch of smaller sub-problem distributions, calculating those OCF's, and element-wise summing all of the smaller OCF's together. The trick is how to come up with the sub-problems.
 
 To make this a little more tangible, I'm going to work through a specific example.
 
@@ -412,6 +410,13 @@ def roll_kdn_drop_highest(k: int, n: int):
     return result
 ```
 
+Some graphs of this are shown below:
+
+![Plot for OCF of 2d6 drop highest](plot-2d6-drop-high-1.png)
+
+![Plot for OCF of 4d6 drop highest](plot-4d6-drop-high-1.png)
+
+
 Like the function itself, the complexity can also be expressed recursively. The non-recursive parts are:
 - the base case at `kd1` or `1dn`, which are constant time: \(O(1)\)
 - a loop from \(i=0\) to \(k-1\): \(O( \sum_{i=0}^{k-1} ... )\):
@@ -423,7 +428,7 @@ Let \(O(C(k, n))\) be the time complexity of this algorithm. Then altogether the
 
 $$
 \begin{align}
-O(C(k, n)) :&= O\left( C(k, n-1) + \sum_{i=1}^{k-1} (i^2 n^2 + in) \right) \\
+O(C(k, n)) :&= O\left( C(k, n-1) + \sum_{i=1}^{k-1} (i^2 n^2 + \cancel{in} + \cancel{kn}) \right) \\
     &= O\left( C(k, n-1) + n^2 \sum_{i=1}^{k-1} i^2 \right) \\
     &= O\left( C(k, n-1) + n^2 k^3 \right) \\
     \textit{apply def. of } C(k, n-1) \rightarrow &= O\left( \left( C(k, n-2) + k^3 {(n-1)}^2 \right) + k^3 n^2 \right) \\
@@ -433,13 +438,11 @@ O(C(k, n)) :&= O\left( C(k, n-1) + \sum_{i=1}^{k-1} (i^2 n^2 + in) \right) \\
 \end{align}
 $$
 
--> **the time complexity is \(O(k^3 n^3)\)**
-
 ### calculate all sub-distributions in advance -> better performance & complexity
 
 In #kdn, we showed that it takes just as much time complexity to calculate an OCF for `kdn`, as it does to calculate all OCF's of `idn` for \(i \in [1, k]\). Doing the latter explicitly in this function is significant enough that it actually improves the overall time complexity.
 
-The new Python code might look like this:
+The revised Python code might look like this:
 
 ```python
 def iter_autoconv(dist: SequenceWithOffset):
@@ -467,12 +470,40 @@ $$
 \begin{align}
 O(C(k, n)) :&= O\left( C(k, n-1) + k^2 n^2 + \sum_{i=1}^{k-1} (in) \right) \\
     &= O\left( C(k, n-1) + k^2 n^2 + n \sum_{i=1}^{k-1} i \right) \\
-    &= O\left( C(k, n-1) + k^2 n^2 \right) \\
+    &= O\left( C(k, n-1) + k^2 n^2 + \cancel{k^2 n} \right) \\
     \textit{repeatedly apply def. of } C(k, n-j) \rightarrow &= O\left( ... + k^2 {(n-2)}^2 + k^2 {(n-1)}^2 + k^2 n^2 \right) \\
     &= O\left( k^2 \sum_{j=1}^n {(n-j)}^2 \right) \\
     &= O\left( k^2 n^3 \right) \\
 \end{align}
 $$
 
+So explicitly calculating the auto-convolutions of `1d(n-1)` reduces the time complexity from \(O(k^3 n^3)\) to \(O(k^2 n^3)\), which is a reduction by a factor of \(k\).
 
-## rolling `kdn` and dropping the highest `m` dice
+## rolling `kdn drop high m`
+
+The above can be further generalized to dropping the \(m\) highest dice from the score.
+
+## rolling ... and dropping the lowest dice
+
+While we could repurpose the thinking and problem formulation used before for the "drop highest \(m\) dice" case in order to solve the "drop lowest \(m\) dice" case, there is a simpler solution:
+
+- reverse the distribution array of the input *(technically needed for general calculations, but not needed specifically for dice roll distributions)*
+- calculate `roll_kdn_drop_high(k, d, m)`
+- reverse the distribution array
+
+And we would get the correct result! But why? It's because there's actually a lot of symmetry in this calculation that we can take advantage of.
+
+So imagine if we took the *negative inversion* of our distribution (i.e., \(f_{1d(-n)}(x) = f_{1dn}(-x)\)), where all outcomes instead are comprised of negative numbers (i.e., `2d(-6)` has outcomes like \((-3, -5)\)). It's easy enough to map outcomes & events from `1d(-n)` to `1dn` and vice versa.
+
+Now if we used this inverted distribution to do the same calculation of dropping the "highest" values, it would instead drop the highest *negative* values in `kd(-n)`, which would correspond to the *lowest* values in `kdn`.
+
+In this way, we can reuse `roll_kdn_drop_high(k, d, m)` to calculate `roll_kdn_drop_low(k, d, m)`, without having to reformulate the previous algorithm at all:
+
+```python
+def roll_kdn_drop_low(k: int, d: int, m: int):
+    result = roll_kdn_drop_high(k, d, m)
+    result.seq = result.seq[::-1]
+    return result
+```
+
+This also takes advantage of some simplifications for the case of dropping highs/lows from `kdn` specifically: since `1dn` always has a symmetric distribution, it doesn't have to be reversed in the first step. Also, the offset doesn't have to change since the range of valid score events is the same for `kdn drop high m` and `kdn drop low m`.
