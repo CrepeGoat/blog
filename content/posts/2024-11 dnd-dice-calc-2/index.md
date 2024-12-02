@@ -46,7 +46,7 @@ Both stat groups had a 5. DM said "oof, that's pretty unlucky. sorry dawg." Choo
 
 Obviously this was not super lucky.
 
-...but *how* unlucky is this, exactly?
+...but *how* unlucky is this, exactly? 🧐
 
 In the last post I talked about the coding side of building a D&D dice probability calculator / visualization tool. In this post I want to dip into the (imo easier) math behind calculating these distributions.
 
@@ -124,8 +124,8 @@ Re: runtime complexity - unfortunately the docs aren't super clear, so I'm left 
 - There are other algorithms with better asymptotic performance (e.g. [Toom-Cook 3 @ \(O(n^{1.46})\)](https://en.wikipedia.org/wiki/Toom–Cook_multiplication)), but they also have large coefficients that might be impractical for typical NumPy users / use cases.
 - There's also [a NumPy implementation for a method of convolution that utilizes FFT's](https://docs.scipy.org/doc/scipy-1.14.1/reference/generated/scipy.signal.fftconvolve.html) which runs in \(O(n\log n)\) time, but since that only works on floating-point data I elected not to use it.
     - It seems like there's an analogous method of doing the FFT-enabled convolution for integers in the same \(O(n log(n))\) time, but instead using [the Number-theoretic Transform (NTT)](https://en.wikipedia.org/wiki/Discrete_Fourier_transform_over_a_ring#Number-theoretic_transform).
-        - However, I am under the impression that NumPy devs didn't implement this integer-specific algorithm for convolution. Because the corresponding floating-point specific algorithm using the FFT has its own function, and if they *had* implemented an integer-specific NTT, I imagine it would get its own function too. And I don't see one in the docs.
-        - Also, from the paper cited above it seems like there are a number of complications required in the implementation to make it feasible. And it's unclear to me whether the NumPy developers would develop a complicated special-case algorithm just for integers, which I imagine is a pretty niche use case.
+        - However, I am under the impression that NumPy devs didn't implement this integer-specific algorithm for convolution. Mainly because the corresponding floating-point specific algorithm using the FFT has its own function, and if they *had* implemented an integer-specific NTT, I imagine it would get its own function too. And I don't see one in the docs.
+        - Also, from the paper cited above it seems like there are a number of complications required in the implementation to make it feasible. And it's unclear to me whether the NumPy developers would develop a complicated special-case algorithm just for integers, which I imagine is a pretty niche use case since you can just cast ints to floats.
 
 -> Moving forward I'll assume a conservative \(O(n^2)\) time complexity for this function, but know that this may not be the true complexity depending on implementation specifics.
 
@@ -494,6 +494,10 @@ Specifically, I wouldn't be able to use the nested recursive `kdnm1` calculation
 
 The above can be further generalized to dropping the \(m\) highest dice from the score.
 
+TODO - but right now, I am very tired. I'll write about this... later.
+
+### caching calculated sub-distribution
+
 TODO
 
 ## rolling "..." and dropping the *lowest* dice
@@ -525,7 +529,29 @@ This also takes advantage of some simplifications for the case of dropping highs
 
 ## refactors for working with generic distributions
 
-TODO
+After writing Python functions like the ones described in the prior sections, I realized that they could be made even more generic. Specifically, the functions that calculated distributions for repeated rolls (i.e., `roll_kdn`, `roll_kdn_drop_lowest`, etc.) didn't actually rely on any specific features of dice-roll distributions; in fact, they could be reworked to accept a generic distribution parameter and operate directly on that with few changes to the original algorithm.
+
+For example, `roll_kdn` was refactored into `roll_k`:
+
+```python
+def roll_k(dist: SequenceWithOffset, k: int) -> SequenceWithOffset:
+    result = roll_0dn()
+    for _ in range(k):
+        result = result.convolve(dist)
+    return result
+```
+
+TODO - for more specifics, check out [the real source code](https://github.com/CrepeGoat/heart-of-the-dice/blob/v0.1.1/dice/calc.py).
+
+These modifications mean that we can calculate arbitrary nestings of repeated distributions with dropped high or low values. For example, calculating the distribution for the sum of rolled stats could be done by running:
+
+```python
+roll_k(roll_k_drop_lowest(roll_1dn(n=6), k=4, drop=1), k=6)
+```
+
+which wouldn't have been possible to calculate with the pre-factored code.
+
+And with the above change, the calculation functions are effectively feature-complete to calculate any probability result I could want.
 
 # so... how much does God hate me?
 
