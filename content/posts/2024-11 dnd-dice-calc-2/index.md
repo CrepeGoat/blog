@@ -14,6 +14,7 @@ tags:
   - statistics
   - probability
   - imnotbitter
+  - doesgodexist
 ---
 
 > Is God willing to prevent evil, but not able? Then he is not omnipotent.
@@ -554,7 +555,7 @@ which wouldn't have been possible to calculate with the pre-factored code.
 
 And with the above change, the calculation functions are effectively feature-complete to calculate any probability result I could want.
 
-# so... how much does God hate me?
+# hath god forsaken me?
 
 After writing out this math & code, I opened up a Python interpreter, loaded in the code, and started running some numbers:
 
@@ -613,4 +614,4 @@ After writing out this math & code, I opened up a Python interpreter, loaded in 
   ```
   -> rolling a 5 for both stat blocks is not as bad as crit-failing with advantage (0.25%, \(\frac{1}{400}\)), but is worse than rolling a 2 with advantage (0.75%, \(\frac{3}{400}\)), which is pretty bad.
 
-God dammit.
+...god dammit.
