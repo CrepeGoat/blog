@@ -5,6 +5,7 @@ date: 2024-11-26T00:14:00-05:00
 draft: true
 toc: false
 images:
+mathjax: true
 tags: 
   - d&d
   - coding

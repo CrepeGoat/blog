@@ -25,7 +25,6 @@ theme = 'hermit-v2'
   homeSubtitle = "Becker Awqatty's public brainscape"
   gitUrl = "https://github.com/CrepeGoat/blog/tree/main"
   enableGitInfo = true
-  global_mathjax = true
   math = true
 
   readTime = true
