@@ -5,12 +5,31 @@ theme = 'hermit-v2'
 
 # more config options exemplified at
 # https://github.com/1bl4z3r/hermit-V2/blob/main/hugo.toml.example
+# https://1bl4z3r.github.io/hermit-V2/en/posts/explaining-configs/
 
 [params]
   dateform        = "Jan 2, 2006"
   dateformShort   = "Jan 2"
   dateformNum     = "2006-01-02"
   dateformNumTime = "2006-01-02 15:04 -0700"
+
+  homeSubtitle = "Becker Awqatty's public brainscape"
+  gitUrl = "https://github.com/CrepeGoat/blog/tree/main"
+  enableGitInfo = true
+
+  readTime = true
+  shareSocial = true
+
+  [params.author]
+    name = "BekR"
+
+  [[params.socialLinks]]
+    name = "github"
+    url = "https://github.com/CrepeGoat/blog/tree/main"
+
+  [[params.socialLinks]]
+    name = "linkedin"
+    url = "https://www.linkedin.com/in/beckerawqatty/"
 
 [menu]
 
