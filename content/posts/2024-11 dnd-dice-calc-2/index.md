@@ -66,7 +66,7 @@ Before getting into the math, I want to make sure readers understand some fundam
     f(\text{anything else}) := 0 \\
   \end{array}
   $$
-- [convolution](https://en.wikipedia.org/wiki/Convolution) is a mathematical operation that (in this case) takes as input two distributions, and as output generates a third distribution. In this case, we'll use convolution to [calculate the distribution for the sum of two experiments](https://en.wikipedia.org/wiki/Convolution_of_probability_distributions) (e.g., `2d6` = `1d6` + `1d6`).
+- [convolution](https://en.wikipedia.org/wiki/Convolution) is a mathematical operation that takes as input two N-dimensional arrays of numbers, and as output generates a third N-dimensional array. In this case, we'll use 1D-convolution to [calculate the distribution for the sum of two experiments](https://en.wikipedia.org/wiki/Convolution_of_probability_distributions) (e.g., `2d6` = `1d6` + `1d6`).
 
 ## implementing convolution
 
@@ -117,20 +117,23 @@ class SequenceWithOffset:
         return SequenceWithOffset(seq=seq, offset=index_low)
 ```
 
-Re: runtime complexity - unfortunately the docs aren't super clear, so I'm left to either read the source code (this is for fun I don't wanna) or guess. [Some research](https://fse.studenttheses.ub.rug.nl/25184/1/bCS_2021_GhidirimschiN.pdf.pdf) makes guessing a little easier:
+Re: runtime complexity - unfortunately the docs aren't super clear, so I'm left to either read the source code (this is for fun I don't wanna read source code 😭), or guess. [Some research](https://fse.studenttheses.ub.rug.nl/25184/1/bCS_2021_GhidirimschiN.pdf.pdf) (and [some more](https://wangwei1237.github.io/shares/Algorithms_for_Efficient_Computation_of_Convolution.pdf)) makes guessing a little easier:
 
 - A naive algorithm would run in \(O(n_1 n_2)\) time.
 - The [Karatsuba algorithm](https://en.wikipedia.org/wiki/Karatsuba_algorithm) runs in \(O(n^{1.58})\) time, and doesn't seem to have other obvious implementation constraints.
-- There are other algorithms with better asymptotic performance (e.g. [Toom-Cook 3 @ \(O(n^{1.46})\)](https://en.wikipedia.org/wiki/Toom–Cook_multiplication)), but they also have large coefficients that might be impractical for typical NumPy users.
-- There's also [a method for convolution that involves FFT's](https://docs.scipy.org/doc/scipy-1.14.1/reference/generated/scipy.signal.fftconvolve.html) which runs in \(O(n\log n)\) time, but since that only works on floating-point data I elected not to use it.
+- There are other algorithms with better asymptotic performance (e.g. [Toom-Cook 3 @ \(O(n^{1.46})\)](https://en.wikipedia.org/wiki/Toom–Cook_multiplication)), but they also have large coefficients that might be impractical for typical NumPy users / use cases.
+- There's also [a NumPy implementation for a method of convolution that utilizes FFT's](https://docs.scipy.org/doc/scipy-1.14.1/reference/generated/scipy.signal.fftconvolve.html) which runs in \(O(n\log n)\) time, but since that only works on floating-point data I elected not to use it.
+    - It seems like there's an analogous method of doing the FFT-enabled convolution for integers in the same \(O(n log(n))\) time, but instead using [the Number-theoretic Transform (NTT)](https://en.wikipedia.org/wiki/Discrete_Fourier_transform_over_a_ring#Number-theoretic_transform).
+        - However, I am under the impression that NumPy devs didn't implement this integer-specific algorithm for convolution. Because the corresponding floating-point specific algorithm using the FFT has its own function, and if they *had* implemented an integer-specific NTT, I imagine it would get its own function too. And I don't see one in the docs.
+        - Also, from the paper cited above it seems like there are a number of complications required in the implementation to make it feasible. And it's unclear to me whether the NumPy developers would develop a complicated special-case algorithm just for integers, which I imagine is a pretty niche use case.
 
--> Moving forward I'll assume \(O(n^2)\) time complexity for this function, but know that this may not be the true complexity depending on implementation specifics.
+-> Moving forward I'll assume a conservative \(O(n^2)\) time complexity for this function, but know that this may not be the true complexity depending on implementation specifics.
 
 ## probabilities vs. outcomes
 
 One small change in perspective I want to implement here: instead of thinking in terms of probability distributions, I instead want to think in terms of *outcome-count distributions*.
 
-So for example, let's consider the `2d6` case. There are \(6 \times 6 = 36\) different possible *outcomes*. The *events* we want to consider are the possible sums of dice values resulting from any of these 36 different outcomes; for `2d6` there are \(11\) such different events, which include all the integers from \(2\) (realized by rolling two \(1\)'s) to \(12\) (realized by rolling two \(6\)'s). I'll refer to these values as *scores*, or score values.
+So for example, let's consider the `2d6` case. There are \(6 \times 6 = 36\) different possible *outcomes*. The *events* we want to consider are the possible sums of dice values resulting from any of these 36 different outcomes; for `2d6` there are \(11\) such different events, which include all the integers from \(2\) (realized by rolling two \(1\)'s) to \(12\) (realized by rolling two \(6\)'s). I'll refer to these event values as *scores*, or *score values*.
 
 Now let's say we're interested in how we might roll the score value \(5\). There are 4 outcomes that result in a \(5\): \({(1, 4), (2, 3), (3, 2), (4, 1)}\).
 
@@ -414,7 +417,7 @@ Some graphs of this are shown below:
 
 ![Plot for OCF of 2d6 drop highest](plot-2d6-drop-high-1.png)
 
-![Plot for OCF of 4d6 drop highest](plot-4d6-drop-high-1.png)
+![Plot for OCF of 3d6 drop highest](plot-3d6-drop-high-1.png)
 
 
 Like the function itself, the complexity can also be expressed recursively. The non-recursive parts are:
@@ -479,11 +482,21 @@ $$
 
 So explicitly calculating the auto-convolutions of `1d(n-1)` reduces the time complexity from \(O(k^3 n^3)\) to \(O(k^2 n^3)\), which is a reduction by a factor of \(k\).
 
+### note re: outcome counts vs. probabilities
+
+So when I said "[using outcome counts] makes recursive calculations simpler", this is what I meant.
+
+Specifically, I wouldn't be able to use the nested recursive `kdnm1` calculations as sub-functions to calculate `roll_kdn_drop_highest`, unless I either 1) first converted each probability distribution to an outcome-count distribution before doing any aggregation, or 2) tried to use them as conditional probabilities. Doing both of these things would be annoyingly complicated.
+
+*(In fact, when I was first writing this code I started out using probability distributions with workaround 1), and when I got to doing the "drop highest/lowest die" functions I ran into bugs that I couldn't figure out how to fix. For me in this case, it turned out to be easier to refactor everything into using outcome counts and rewriting the function s.t. the bugs were obviated, rather than fixing whatever bugs I had.)*
+
 ## rolling `kdn drop high m`
 
 The above can be further generalized to dropping the \(m\) highest dice from the score.
 
-## rolling ... and dropping the lowest dice
+TODO
+
+## rolling "..." and dropping the *lowest* dice
 
 While we could repurpose the thinking and problem formulation used before for the "drop highest \(m\) dice" case in order to solve the "drop lowest \(m\) dice" case, there is a simpler solution:
 
@@ -506,4 +519,71 @@ def roll_kdn_drop_low(k: int, d: int, m: int):
     return result
 ```
 
-This also takes advantage of some simplifications for the case of dropping highs/lows from `kdn` specifically: since `1dn` always has a symmetric distribution, it doesn't have to be reversed in the first step. Also, the offset doesn't have to change since the range of valid score events is the same for `kdn drop high m` and `kdn drop low m`.
+This also takes advantage of some simplifications for the case of dropping highs/lows from `kdn` specifically:
+- since `1dn` always has a symmetric distribution, it doesn't have to be reversed in the first step.
+- the offset doesn't have to change since the range of valid score events (i.e., the offset and the array length) is the same for `kdn drop high m` and `kdn drop low m`.
+
+## refactors for working with generic distributions
+
+TODO
+
+# so... how much does God hate me?
+
+After writing out this math & code, I opened up a Python interpreter, loaded in the code, and started running some numbers:
+
+```pyconsole
+>>> from dice import calc as dc
+>>> import numpy as np
+```
+
+- what are the odds of getting the stat sums that I got for my two stat groups?
+  ```pyconsole
+  >>> sum([17, 5, 14, 14, 15, 9])
+  74
+  >>> sum([12, 15, 5, 15, 10, 15])
+  72
+  >>>
+  >>> stat_sum = dc.roll_k(dc.roll_k_droplow(dc.roll_1dn(6), k=4, drop=1), k=6)
+  >>> stat_cdist = np.add.accumulate(stat_sum.seq)
+  >>>
+  >>> stat_cdist[74 - stat_sum.offset] / stat_cdist[-1]
+  np.float64(0.5507508601943684)
+  >>> stat_cdist[72 - stat_sum.offset] / stat_cdist[-1]
+  np.float64(0.4377304041567714)
+  ```
+  -> these are the 55th and 43rd percentiles; both percentiles are within 10% of the median, the center of the distribution, which is quite close. Not lucky, not unlucky.
+
+- what are the chances of rolling a \(5\) or lower for a single stat?
+  ```pyconsole
+  >>> dc.roll_k_droplow(dc.roll_1dn(6), 4, 1)
+  SequenceWithOffset(seq=array([  1,   4,  10,  21,  38,  62,  91, 122, 148, 167, 172, 160, 131,
+          94,  54,  21], dtype=uint64), offset=3)
+  >>> (1 + 4 + 10) / (6 ** 4)
+  0.011574074074074073
+  ```
+  -> ~1.16%, or about \(\frac{5}{432}\) *(note that this event has \(1 + 4 + 10 = 15\) outcomes; this is less likely than rolling the highest number, an 18, which has \(21\) outcomes.)*
+- what are the chances of rolling a \(5\) or lower for *any* of the six stats in a stat group?
+  ```pycon
+  >>> p = 15 / (6 ** 4)
+  >>> 1 - (1 - p) ** 6
+  0.06746579772408667
+  ```
+  -> ~6.75%, about \(\frac{5}{74}\)
+- what are the chances of rolling a \(5\) or lower *in both stat groups*?
+  ```pycon
+  >>> p_g = 1 - (1 - p) ** 6
+  >>> p_g ** 2
+  0.004551633862547378
+  ```
+  **-> ~0.455%**, about \(\frac{1}{219}\)
+- how unlucky is that compared to rolling a 1 with advantage?
+  ```pycon
+  >>> d20_adv = dc.roll_k_droplow(dc.roll_1dn(20), k=2, drop=1)
+  >>> d20_adv.seq / (20 ** 2)
+  array([0.0025, 0.0075, 0.0125, 0.0175, 0.0225, 0.0275, 0.0325, 0.0375,
+         0.0425, 0.0475, 0.0525, 0.0575, 0.0625, 0.0675, 0.0725, 0.0775,
+         0.0825, 0.0875, 0.0925, 0.0975])
+  ```
+  -> rolling a 5 for both stat blocks is not as bad as crit-failing with advantage (0.25%, \(\frac{1}{400}\)), but is worse than rolling a 2 with advantage (0.75%, \(\frac{3}{400}\)), which is pretty bad.
+
+God dammit.
