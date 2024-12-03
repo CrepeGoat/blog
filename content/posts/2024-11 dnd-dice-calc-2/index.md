@@ -494,7 +494,48 @@ Specifically, I wouldn't be able to use the nested recursive `kdnm1` calculation
 
 ## rolling `kdn drop high m`
 
-The above can be further generalized to dropping the \(m\) highest dice from the score.
+The above can be further generalized to dropping the \(m\) highest dice from the score. We can reuse most the previous algorithm, i.e. do the same splitting on the different outcomes for rolling the highest die value; the main difference here will be in how we recurse and how we assign score values to sub-distributions.
+
+Similar to before, we have a partition of sub-distributions based on how many high values are rolled. Sub-distributions have a piecewise definition:
+
+- When the number of high values \(i\) is greater than (or equal to) the amount of dice to drop \(m\), then those high values are deducted from the drop count, and the remaining \(i - m\) high values contribute to the overall score:
+
+  $$
+  f_{d_i \ | \ i \geq m} (x) := {n \choose i} f_{id(n-1) + n \cdot (i-m)} (x)
+  $$
+- When the number of high values \(i\) is *less than* (or equal to) the amount of dice to drop \(m\), then those high values are dropped, and the remaining drop count \(m - i\) is passed on to the sub-distribution:
+
+  $$
+  f_{d_i \ | \ i \leq m} (x) := {n \choose i} f_{id(n-1) \text{ drop } (m-i)} (x)
+  $$
+
+In both cases, the sub-problems always have a smaller \(n\) value, and sometimes have smaller \(k\) and \(m\) values. Again as in the `kdn drop highest` problem, since this is a recursive function we need to provide base case definitions so that it doesn't recurse indefinitely. Now that there is another decreasing input value \(m\) in addition to the other previous ones \(k\) and \(n\), we need *three* base cases:
+
+- when \(m = 0\) - this reduces to `kdn`:
+  $$
+  f_{kdn \text{ drop high } 0} (x) \\
+  = f_{kdn} (x) \\
+  $$
+- when \(n = 1\) - basically the same as in `kdn drop highest`:
+  $$
+  f_{kd1 \text{ drop high } m} (x) \\
+  = f_{k-m} (x) \\
+  = \begin{cases}
+      1 & \text{if } x = k-m \\
+      0 & \text{otherwise} \\
+  \end{cases}
+  $$
+- and when \(k = m\) - if we roll \(k\) dice and drop \(m\) of them, we've rolled \(0\) dice:
+  $$
+  f_{kdn \text{ drop high } k} (x) \\
+  = f_{0} (x) \\
+  = \begin{cases}
+      1 & \text{if } x = 0 \\
+      0 & \text{otherwise} \\
+  \end{cases}
+  $$
+
+
 
 TODO - but right now, I am very tired. I'll write about this... later.
 
@@ -504,7 +545,7 @@ TODO
 
 ## rolling "..." and dropping the *lowest* dice
 
-While we could repurpose the thinking and problem formulation used before for the "drop highest \(m\) dice" case in order to solve the "drop lowest \(m\) dice" case, there is a simpler solution:
+While we could repeat the thinking and problem formulation used before for the "drop highest \(m\) dice" case in order to solve the "drop lowest \(m\) dice" case, there is a simpler solution:
 
 - reverse the distribution array of the input *(technically needed for general calculations, but not needed specifically for dice roll distributions)*
 - calculate `roll_kdn_drop_high(k, d, m)`
