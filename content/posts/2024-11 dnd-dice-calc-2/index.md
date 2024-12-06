@@ -377,23 +377,23 @@ $$
 
 However, since this is a recursive definition, we have to define the end conditions, of which there happen to be two:
 - when \(k = 1\) - if we roll one die and drop "the highest" (a.k.a. "the only"), it's the same as rolling no dice: 
-$$
-f_{1dn \text{ drop highest}} (x) \\
-= f_{0} (x) \\
-= \begin{cases}
-    1 & \text{if } x = 0 \\
-    0 & \text{otherwise} \\
-\end{cases}
-$$
+  $$
+  f_{1dn \text{ drop highest}} (x) \\
+  = f_{0} (x) \\
+  = \begin{cases}
+      1 & \text{if } x = 0 \\
+      0 & \text{otherwise} \\
+  \end{cases}
+  $$
 - and when \(n = 1\) - if all dice can only roll a \(1\), then rolling \(k\) dice and dropping "the highest" should always result in the same value, i.e. \(k-1\):
-$$
-f_{kd1 \text{ drop highest}} (x) \\
-= f_{k-1} (x) \\
-= \begin{cases}
-    1 & \text{if } x = k-1 \\
-    0 & \text{otherwise} \\
-\end{cases}
-$$
+  $$
+  f_{kd1 \text{ drop highest}} (x) \\
+  = f_{k-1} (x) \\
+  = \begin{cases}
+      1 & \text{if } x = k-1 \\
+      0 & \text{otherwise} \\
+  \end{cases}
+  $$
 
 In both end cases, the OCF reduces to \(f_{k-1}\).
 
@@ -499,14 +499,12 @@ The above can be further generalized to dropping the \(m\) highest dice from the
 Similar to before, we have a partition of sub-distributions based on how many high values are rolled. Sub-distributions have a piecewise definition:
 
 - When the number of high values \(i\) is greater than (or equal to) the amount of dice to drop \(m\), then those high values are deducted from the drop count, and the remaining \(i - m\) high values contribute to the overall score:
-
   $$
-  f_{d_i \ | \ i \geq m} (x) := {n \choose i} f_{id(n-1) + n \cdot (i-m)} (x)
+  f_{d_i \ | \ i \geq m} (x) := {k \choose i} f_{(k-i)d(n-1) + n \cdot (i-m)} (x)
   $$
 - When the number of high values \(i\) is *less than* (or equal to) the amount of dice to drop \(m\), then those high values are dropped, and the remaining drop count \(m - i\) is passed on to the sub-distribution:
-
   $$
-  f_{d_i \ | \ i \leq m} (x) := {n \choose i} f_{id(n-1) \text{ drop } (m-i)} (x)
+  f_{d_i \ | \ i \leq m} (x) := {k \choose i} f_{(k-i)d(n-1) \text{ drop } (m-i)} (x)
   $$
 
 In both cases, the sub-problems always have a smaller \(n\) value, and sometimes have smaller \(k\) and \(m\) values. Again as in the `kdn drop highest` problem, since this is a recursive function we need to provide base case definitions so that it doesn't recurse indefinitely. Now that there is another decreasing input value \(m\) in addition to the other previous ones \(k\) and \(n\), we need *three* base cases:
@@ -535,13 +533,48 @@ In both cases, the sub-problems always have a smaller \(n\) value, and sometimes
   \end{cases}
   $$
 
+Altogether, we can mathematically express the distribution as follows:
 
+$$
+\begin{align}
+f_{kdn \text{ drop high } 0} (x) &= f_{kdn} (x) \\
+f_{kd1 \text{ drop high } m} (x) &= f_{k-m} (x) \\
+f_{kdn \text{ drop high } k} (x) &= f_{0} (x) \\
+f_{kdn \text{ drop high } m} (x) &=
+  \sum_{i=0}^{m-1} {k \choose i} f_{(k-i)d(n-1) \text{ drop } (m-i)} (x) \\
+  &+ \sum_{i=m}^k {k \choose i} f_{(k-i)d(n-1) + n \cdot (i-m)} (x)
+\end{align}
+$$
 
-TODO - but right now, I am very tired. I'll write about this... later.
+A Python implementation might look like this:
+
+```python
+def roll_kdn_drop_high(k: int, n: int, m: int) -> SequenceWithOffset:
+    if k == m or n == 1:
+        return SequenceWithOffset(seq=np.array([1], dtype=np.uint64), offset=k-m)
+    if m == 0:
+        return roll_kdn(k=k, n=n)
+
+    result = SequenceWithOffset(seq=np.array([], dtype=np.uint64), offset=0)
+    for i in range(m):
+        sub_dist = roll_kdn_drop_high(k=k-i, n=n-1, m=m-i)
+        sub_dist.seq *= math.comb(k, i)
+        result = result.consolidate(sub_dist)
+
+    for i in range(m, k):
+        sub_dist = roll_kdn(k=k-i, n=n-1)
+        sub_dist.seq *= math.comb(k, i)
+        sub_dist.offset += n * (i - m)
+        result = result.consolidate(sub_dist)
+
+    return result
+```
+
+The problem with this implementation is that the time complexity is infeasible, due to unnecessarily redundant calculations. Specifically, the same sub-distributions are calculated multiple times for different iterations of the higher-level sub-distributions. The solution to this is to cache the redundantly-calculated results so that they can be reused.
 
 ### caching calculated sub-distribution
 
-TODO
+Another upside of using Python is that there are a lot of standard-library-provided solutions to common problems, and caching function calls happens to be one of those problems. For this, Python provides [`functools.lru_cache`](https://docs.python.org/3/library/functools.html#functools.lru_cache), which we can use in our function
 
 ## rolling "..." and dropping the *lowest* dice
 
