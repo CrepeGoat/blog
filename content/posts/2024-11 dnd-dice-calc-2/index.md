@@ -494,7 +494,7 @@ Specifically, I wouldn't be able to use the nested recursive `kdnm1` calculation
 
 ## rolling `kdn drop high m`
 
-The above can be further generalized to dropping the \(m\) highest dice from the score. We can reuse most the previous algorithm, i.e. do the same splitting on the different outcomes for rolling the highest die value; the main difference here will be in how we recurse and how we assign score values to sub-distributions.
+The above can be further generalized to dropping the \(m\) highest dice from the score. We can reuse most the previous algorithm, i.e. do the same splitting on the different outcomes for rolling the highest die value; the main differences here will be in how we recurse and how we assign score values to sub-distributions.
 
 Similar to before, we have a partition of sub-distributions based on how many high values are rolled. Sub-distributions have a piecewise definition:
 
@@ -570,9 +570,72 @@ def roll_kdn_drop_high(k: int, n: int, m: int) -> SequenceWithOffset:
     return result
 ```
 
-The problem with this implementation is that the time complexity is infeasible, due to unnecessarily redundant calculations. Specifically, the same sub-distributions are calculated multiple times for different iterations of the higher-level sub-distributions. The solution to this is to cache the redundantly-calculated results so that they can be reused.
-
 ### caching calculated sub-distribution
+
+Initially I thought the above implementation was pretty good. But after implementing and playing around with different inputs, I noticed that there was a sizeable delay when calculating large drop counts. For example, running `roll_kdn_drop_high(n=20, k=7, m=6)` took a couple seconds to calculate, and increasing the input values to `k=10, m=9` made the code completely hang. I done borked something.
+
+This whole issue was actually giving me flashbacks of when I was first learning to code on my own, back when I was doing Hacker Rank (effectively a LeetCode clone/ancestor) problems for fun. There were a handful of occasions where I'd write a recursive function and it would hang once the inputs got up to ~10-20 in size or magnitude. The solution: either rewrite use a non-recursive algorithm, or add in caching to the recursive definition.
+
+#### debugging
+
+But first, let's verify the problem. I took the above Python function definition and added in a print statement at the very top of the function, something like `print(f"roll {k}d{n} drop high {m}")`; this will tell me how many times the function gets re-called during recursion. Rerunning the print-augmented function call `roll_kdn_drop_high(n=20, k=7, m=6)` generated a *wall* of terminal text. I took that, dropped it into a text file, reformatted it into a Python list called `log`, where every entry in `log` was a separate `print` call, and then loaded `log` into a Python terminal.
+
+With the `print` calls in a Python terminal, I could do some analysis. Firstly, how many `print` calls were there?
+
+```pycon
+>>> len(log)
+407330
+```
+
+That's a *lot* of calls. Potentially the recursive function was having issues terminating, but 1) if it didn't terminate, it would've kept going indefinitely, and 2) I have my intuition that the function is getting called with the same inputs repeatedly.
+
+What do the function call frequencies look like?
+
+```pycon
+>>> from collections import defaultdict
+>>> counts = defaultdict(int)
+>>> for l in log:
+...     counts[l] += 1
+... 
+>>> counts
+defaultdict(<class 'int'>, { [A BUNCH OF ENTRIES...] })
+```
+
+Ooooookay that's too much data. How many unique `print` calls were there?
+
+```pycon
+>>> len(counts)
+141
+```
+
+*There*'s an issue: the function gets called \(407,330\) times, but only \(141\) of the calls are unique. So \(407,330 - 141 = 407,189\) of the function calls are redundant.
+
+At this point we've already identified the problem, but now I'm curious: what does the frequency distribution look like? (E.g., if there were a few specific calls that was responsible for most of the repetition, then maybe I wouldn't have to cache everything?)
+
+```pycon
+>>> list(reversed(sorted(counts.values())))
+[42504, 42504, 33649, 33649, 26334, 26334, 20349, 20349, 15504, 15504, 11628, 11628, 8855, 8568, 8568, 7315, 6188, 6188, 5985, 4845, 4368, 4368, 3876, 3060, 3003, 3003, 2380, 2002, 2002, 1820, 1540, 1365, 1330, 1287, 1287, 1140, 1001, 969, 816, 792, 792, 715, 680, 560, 495, 462, 462, 455, 364, 330, 286, 252, 252, 220, 210, 210, 190, 171, 165, 153, 136, 126, 126, 126, 120, 120, 105, 91, 84, 78, 70, 66, 56, 56, 56, 55, 45, 36, 35, 35, 28, 21, 21, 21, 20, 20, 19, 18, 17, 16, 15, 15, 15, 14, 13, 12, 11, 10, 10, 10, 9, 8, 7, 6, 6, 6, 6, 5, 5, 4, 4, 3, 3, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+```
+
+Okay, yeah the redundancy is not evenly distributed; the majority of redundancy belongs to a subset of the function calls.
+
+In fact, there's a simple metric to characterize this majority responsibility phenomenon, by generalizing the concept behind [the 80-20 rule](TODO) to arbitrary percentages. Specifically, I now want to ask this question: what percent \(x\) of the most-frequent unique function calls contribute to \(1-x\)% of the total function calls?
+
+```python
+import numpy as np
+
+def lions_share_percentage(values) -> float:
+    values = sorted(values)
+    array = np.array([0] + values)
+    array_acc = np.add.accumulate(array)
+    array_acc_percent = array_acc / array_acc[-1]
+    equal_acc_percent = np.linspace(0, 1, len(array_acc_percent))[::-1]
+    
+    index = np.diff(array_acc_percent >= equal_acc_percent).nonzero()
+    return index[0] / len(values)
+```
+
+#### the fix
 
 Another upside of using Python is that there are a lot of standard-library-provided solutions to common problems, and caching function calls happens to be one of those problems. For this, Python provides [`functools.lru_cache`](https://docs.python.org/3/library/functools.html#functools.lru_cache), which we can use in our function
 
