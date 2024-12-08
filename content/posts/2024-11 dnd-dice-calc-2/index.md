@@ -1,7 +1,7 @@
 ---
-title: "D&D Dice Calculator - Math & Malice"
+title: "D&D Dice Calculator - Math & Misfortune"
 author: me
-date: 2024-11-26T00:14:00-05:00
+date: 2024-12-07T21:24:00-07:00
 draft: true
 toc: false
 images:
