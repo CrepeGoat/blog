@@ -2,7 +2,7 @@
 title: "D&D Dice Calculator - Math & Misfortune"
 author: me
 date: 2024-12-07T21:24:00-07:00
-draft: true
+draft: false
 toc: false
 images:
 mathjax: true
