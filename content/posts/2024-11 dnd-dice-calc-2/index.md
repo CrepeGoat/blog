@@ -445,7 +445,7 @@ $$
 
 ### calculate all sub-distributions in advance -> better performance & complexity
 
-In #kdn, we showed that it takes just as much time complexity to calculate an OCF for `kdn`, as it does to calculate all OCF's of `idn` for \(i \in [1, k]\). Doing the latter explicitly in this function is significant enough that it actually improves the overall time complexity.
+In #kdn (TODO fix link), we showed that it takes just as much time complexity to calculate an OCF for `kdn`, as it does to calculate all OCF's of `idn` for \(i \in [1, k]\). Doing the latter explicitly in this function is significant enough that it actually improves the overall time complexity.
 
 The revised Python code might look like this:
 
@@ -712,7 +712,7 @@ Let's track some of the function calls:
 
 So from this, it seems like the function calls span two specific ranges of parameters:
 1. calling \(k_\text{r} \text{d} n_\text{r} \text{ dh} 0\) for the parameter ranges \(n_\text{r} \in [1, n-1]\) and \(k_\text{r} \in [0, k-m]\)
-    - from the previous section #kdn, we know that calculating \(\{i\text{d}n \ |\  i \in [0, k]\}\) takes \(O(k^2 n^2)\) time
+    - from the previous section #kdn (TODO fix link), we know that calculating \(\{i\text{d}n \ |\  i \in [0, k]\}\) takes \(O(k^2 n^2)\) time
     - -> calculating \(\{i\text{d}j \ |\  i \in [0, k-m], j \in [0, n-1]\}\) would thus take time:
       $$
       \begin{align}
