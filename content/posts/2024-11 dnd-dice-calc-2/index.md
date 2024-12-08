@@ -54,10 +54,10 @@ In the last post I talked about the coding side of building a D&D dice probabili
 
 # some setup
 
-Before getting into the math, I want to make sure readers understand some fundamental background about probability and statistics.
+Before getting into the math, I need to establish some terminology about probability and statistics so I can accurately describe what's going on.
 
-- an [*experiment*](https://en.wikipedia.org/wiki/Experiment_(probability_theory)) is a real-world process, that can be repeated, that has a well-defined set of [*outcomes*](https://en.wikipedia.org/wiki/Outcome_(probability)). E.g., rolling a `d6` is an experiment, and the outcomes are the numbers 1, 2, 3, 4, 5, and 6.
-- an [*event*](https://en.wikipedia.org/wiki/Event_(probability_theory)) is a collection of outcomes. E.g., rolling an even number on a `d6` is an event, which is a collection of the outcomes \({2, 4, 6}\).
+- an [*experiment*](https://en.wikipedia.org/wiki/Experiment_(probability_theory)) is a real-world process, that can be repeated, that has a well-defined set of [*outcomes*](https://en.wikipedia.org/wiki/Outcome_(probability)). E.g., rolling a `d6` is an experiment, and the outcomes are the numbers \(\{(1), (2), (3), (4), (5), (6)\}\).
+- an [*event*](https://en.wikipedia.org/wiki/Event_(probability_theory)) is a collection of any number of outcomes. E.g., rolling an even number on a `d6` is an event, which is a collection of the outcomes \(\{(2), (4), (6)\}\). Rolling the number \(3\) on a `d6` is also an event.
 - a [*probability distribution*](https://en.wikipedia.org/wiki/Probability_distribution) (or in the case of dice rolls specifically, a [*probability mass function (PMF)*](https://en.wikipedia.org/wiki/Probability_mass_function)) is a mathematical function that takes as input a possible outcome / event, and outputs how probable it is for that result to be realized.
 
   For example, if a coin had a 55% change to land on heads when flipped (and a 45% of the same for tails), the PMF \(f\) would be defined as:
@@ -137,10 +137,10 @@ One small change in perspective I want to implement here: instead of thinking in
 
 So for example, let's consider the `2d6` case. There are \(6 \times 6 = 36\) different possible *outcomes*. The *events* we want to consider are the possible sums of dice values resulting from any of these 36 different outcomes; for `2d6` there are \(11\) such different events, which include all the integers from \(2\) (realized by rolling two \(1\)'s) to \(12\) (realized by rolling two \(6\)'s). I'll refer to these event values as *scores*, or *score values*.
 
-Now let's say we're interested in how we might roll the score value \(5\). There are 4 outcomes that result in a \(5\): \({(1, 4), (2, 3), (3, 2), (4, 1)}\).
+Now let's say we're interested in how we might roll the score value \(5\). There are 4 outcomes that result in a \(5\): \(\{(1, 4), (2, 3), (3, 2), (4, 1)\}\).
 
 - in terms of *probability*, there is a \(\frac{4}{36}\) chance of rolling a \(5\) (assuming fair dice).
-- in terms of *outcome counts*, there are 4 outcomes that result in a roll of \(5\): \({(1, 4), (2, 3), (3, 2), (4, 1)}\) are those outcomes.
+- in terms of *outcome counts*, there are 4 outcomes that result in a roll of \(5\): \(\{(1, 4), (2, 3), (3, 2), (4, 1)\}\) are those outcomes.
 - as long as the dice are fair, then one can convert between the two using the equation:
   $$
   (\text{probability that value} = x) = \frac{(\text{# of outcomes where value} = x)}{(\text{total # of outcomes})}
@@ -152,7 +152,7 @@ There are a handful of advantages to doing this:
 
 1. Intermediate computations are all performed on integers instead of floating-point numbers. This means
     - there's no rounding errors that can accumulate through the computation,
-    - each computer-stored number will contain more information (64-bit floating-point numbers only [have 53 bits of storage for digits](https://en.wikipedia.org/wiki/Double-precision_floating-point_format#IEEE_754_double-precision_binary_floating-point_format:_binary64) -> I would get more precision with a 64-bit integer), and
+    - each number in computer memory will contain more information (64-bit floating-point numbers only [have 53 bits of storage for digits](https://en.wikipedia.org/wiki/Double-precision_floating-point_format#IEEE_754_double-precision_binary_floating-point_format:_binary64) -> a 64-bit integer would store 11 more bits, which is an extra 20% of storage), and
     - any resulting values that are too large to store will generally trigger [a hardware-implemented error flag](https://en.wikipedia.org/wiki/Integer_overflow#Flags) that [is easier to respond to](https://doc.rust-lang.org/std/primitive.i64.html#method.checked_add).
 1. It allows us to make some simple correctness checks. Specifically, rolling \(k\) \(n\)-sided dice always yields \(n^k\) outcomes, so any outcome-count distribution generated from rolling \(k\) \(n\)-sided dice must sum to \(n^k\) too. And if it doesn't, then the calculation must be wrong in some way.
 1. It makes recursive calculations simpler. I'll discuss what I mean by this later on.
