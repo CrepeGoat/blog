@@ -798,22 +798,51 @@ Note that the above Python function also takes advantage of some simplifications
 
 After writing Python functions like the ones described in the prior sections, I realized that they could be made even more generic. The functions I wrote that calculated distributions for repeated rolls (i.e., `roll_kdn`, `roll_kdn_drop_lowest`, etc.) didn't actually rely on any specific features of dice-roll distributions; in fact, they could be reworked to accept a generic distribution parameter and operate directly on that with few changes to the original algorithm.
 
-For example, `roll_kdn` was refactored into `roll_k`:
+For example, `roll_kdn_drop_high` was refactored into `roll_k_drop_high`:
 
 ```python
-def roll_k(dist: SequenceWithOffset, k: int) -> SequenceWithOffset:
-    result = roll_0dn()
-    for _ in range(k):
-        result = result.convolve(dist)
-    return result
-```
+def roll_k_drop_high(roll_1: SequenceWithOffset, k: int, drop: int):
+    # Rename outer function parameters to avoid naming collisions with inner
+    # function parameters.
+    _k, _drop = k, drop
+    del k, drop
 
-TODO - hopefully this communicate the gist. For more specifics, check out [the real source code](https://github.com/CrepeGoat/heart-of-the-dice/blob/v0.1.1/dice/calc.py).
+    @functools.lru_cache(maxsize=None)
+    def inner(n: int, k: int, drop: int):
+        if n == 1:
+            return SequenceWithOffset(
+                seq=np.array([1], dtype=np.int64) * (roll_1.seq[0] ** k),
+                offset=roll_1.offset * (k - drop),
+            )
+        if drop == 0:
+            if k == 0:
+                return roll_0()
+            if k == 1:
+                return SequenceWithOffset(seq=roll_1.seq[:n], offset=roll_1.offset)
+            return inner(n=n, k=1, drop=0).convolve(inner(n=n, k=k - 1, drop=0))
+
+        result = roll_1dn(0)
+        for j in range(drop):  # j - the number of fixed dice
+            sub_dist = inner(n - 1, k - j, drop - j).copy()
+            sub_dist.seq *= math.comb(k, j) * (roll_1.seq[n - 1] ** j)
+            result = result.consolidate(sub_dist)
+        for j in range(drop, k + 1):  # j - the number of fixed dice
+            sub_dist = inner(n - 1, k - j, 0).copy()
+            sub_dist.seq *= math.comb(k, j) * (roll_1.seq[n - 1] ** j)
+            sub_dist.offset += (j - drop) * (n - 1 + roll_1.offset)
+            result = result.consolidate(sub_dist)
+        return result
+
+    return inner(n=len(roll_1.seq), k=_k, drop=_drop)
+```
 
 These modifications mean that we can calculate arbitrary nestings of repeated distributions with dropped high or low values. For example, calculating the distribution for the sum of rolled stats could be done by running:
 
 ```python
-roll_k(roll_k_drop_low(roll_1dn(n=6), k=4, drop=1), k=6)
+roll_k(
+    roll_k_drop_low(roll_1dn(n=6), k=4, drop=1),
+    k=6,
+)
 ```
 
 which wouldn't have been possible to calculate with the code before the refactor.
