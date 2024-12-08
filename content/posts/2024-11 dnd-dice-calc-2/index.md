@@ -555,7 +555,7 @@ def roll_kdn_drop_high(k: int, n: int, m: int) -> SequenceWithOffset:
     if m == 0:
         return roll_kdn(k=k, n=n)
 
-    result = SequenceWithOffset(seq=np.array([], dtype=np.uint64), offset=0)
+    result = roll_1dn(0)  # a blank distribution with no outcomes
     for i in range(m):
         sub_dist = roll_kdn_drop_high(k=k-i, n=n-1, m=m-i)
         sub_dist.seq *= math.comb(k, i)
@@ -673,7 +673,8 @@ def roll_kdn_drop_high(k: int, n: int, m: int) -> SequenceWithOffset:
                 return roll_1dn(n)
             return inner(k=1, n=n, m=0).convolve(inner(k=k-1, n=n, m=0))
 
-        result = SequenceWithOffset(seq=np.array([], dtype=np.uint64), offset=0)
+        result = roll_1dn(0)  # a blank distribution with no outcomes
+
         for i in range(m):
             sub_dist = inner(k=k-i, n=n-1, m=m-i).copy()
             sub_dist.seq *= math.comb(k, i)
@@ -821,7 +822,7 @@ def roll_k_drop_high(roll_1: SequenceWithOffset, k: int, drop: int):
                 return SequenceWithOffset(seq=roll_1.seq[:n], offset=roll_1.offset)
             return inner(n=n, k=1, drop=0).convolve(inner(n=n, k=k - 1, drop=0))
 
-        result = roll_1dn(0)
+        result = roll_1dn(0)  # a blank distribution with no outcomes
         for j in range(drop):  # j - the number of fixed dice
             sub_dist = inner(n - 1, k - j, drop - j).copy()
             sub_dist.seq *= math.comb(k, j) * (roll_1.seq[n - 1] ** j)
