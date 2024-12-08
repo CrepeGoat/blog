@@ -152,7 +152,7 @@ There are a handful of advantages to doing this:
 
 1. Intermediate computations are all performed on integers instead of floating-point numbers. This means
     - there's no rounding errors that can accumulate through the computation,
-    - each computer-stored number can store more information (64-bit floating-point numbers only [have 53 bits of storage for digits](https://en.wikipedia.org/wiki/Double-precision_floating-point_format#IEEE_754_double-precision_binary_floating-point_format:_binary64) -> I would get more precision with a 64-bit integer), and
+    - each computer-stored number will contain more information (64-bit floating-point numbers only [have 53 bits of storage for digits](https://en.wikipedia.org/wiki/Double-precision_floating-point_format#IEEE_754_double-precision_binary_floating-point_format:_binary64) -> I would get more precision with a 64-bit integer), and
     - any resulting values that are too large to store will generally trigger [a hardware-implemented error flag](https://en.wikipedia.org/wiki/Integer_overflow#Flags) that [is easier to respond to](https://doc.rust-lang.org/std/primitive.i64.html#method.checked_add).
 1. It allows us to make some simple correctness checks. Specifically, rolling \(k\) \(n\)-sided dice always yields \(n^k\) outcomes, so any outcome-count distribution generated from rolling \(k\) \(n\)-sided dice must sum to \(n^k\) too. And if it doesn't, then the calculation must be wrong in some way.
 1. It makes recursive calculations simpler. I'll discuss what I mean by this later on.
@@ -346,7 +346,7 @@ Specifically, I want to separately consider the following partition of events:
     - the \(4\) gets dropped from the score
     - the remaining die roll less than \(4\), so they are both effectively `d3`'s
     - -> the scored result is effectively `2d3`
-1. the remaining possibilities (which doesn't quite fit the prompt) is that *none* of the dice are \(4\)'s
+1. the remaining possibilities occur when *none* of the dice are \(4\)'s
     - all dice roll less than \(4\), so they are effectively each a `d3`
     - no dice has been designated to be dropped
     - -> this is effectively the same as `3d3 drop highest`
@@ -375,7 +375,7 @@ f_{kdn \text{ drop highest}} (x) \\
     + \sum_{i \in [0, k-1]} {k \choose i} f_{id(n-1) + n \cdot (k-1 -i)}
 $$
 
-However, since this is a recursive definition, we have to define the end conditions, of which there happen to be two:
+However, since this is a recursive definition, we have to define the end conditions for each of the decreasing parameters, \(k\) and \(n\):
 - when \(k = 1\) - if we roll one die and drop "the highest" (a.k.a. "the only"), it's the same as rolling no dice: 
   $$
   f_{1dn \text{ drop highest}} (x) \\
@@ -572,7 +572,7 @@ def roll_kdn_drop_high(k: int, n: int, m: int) -> SequenceWithOffset:
 
 ### caching calculated sub-distribution
 
-Initially I thought the above implementation was pretty good. But after implementing and playing around with different inputs, I noticed that there was a sizeable delay when calculating large drop counts. For example, running `roll_kdn_drop_high(n=20, k=7, m=6)` took a couple seconds to calculate, and increasing the input values to `k=10, m=9` made the code completely hang. I done borked something.
+Initially I thought the above implementation was pretty good. But after implementing and playing around with different inputs, I noticed that there was a sizeable delay when calculating large drop counts. For example, running `roll_kdn_drop_high(n=20, k=7, m=6)` took a couple seconds to calculate, and increasing the input values to `k=10, m=9` took over 30 seconds. I done borked something.
 
 This whole issue was actually giving me flashbacks of when I was first learning to code on my own, back when I was doing Hacker Rank (effectively a LeetCode clone/ancestor) problems for fun. There were a handful of occasions where I'd write a recursive function and it would hang once the inputs got up to ~10-20 in size or magnitude. The solution: either rewrite use a non-recursive algorithm, or add in caching to the recursive definition.
 
@@ -617,33 +617,155 @@ At this point we've already identified the problem, but now I'm curious: what do
 [42504, 42504, 33649, 33649, 26334, 26334, 20349, 20349, 15504, 15504, 11628, 11628, 8855, 8568, 8568, 7315, 6188, 6188, 5985, 4845, 4368, 4368, 3876, 3060, 3003, 3003, 2380, 2002, 2002, 1820, 1540, 1365, 1330, 1287, 1287, 1140, 1001, 969, 816, 792, 792, 715, 680, 560, 495, 462, 462, 455, 364, 330, 286, 252, 252, 220, 210, 210, 190, 171, 165, 153, 136, 126, 126, 126, 120, 120, 105, 91, 84, 78, 70, 66, 56, 56, 56, 55, 45, 36, 35, 35, 28, 21, 21, 21, 20, 20, 19, 18, 17, 16, 15, 15, 15, 14, 13, 12, 11, 10, 10, 10, 9, 8, 7, 6, 6, 6, 6, 5, 5, 4, 4, 3, 3, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 ```
 
-Okay, yeah the redundancy is not evenly distributed; the majority of redundancy belongs to a subset of the function calls.
+Okay, yeah the redundancy is *not* evenly distributed; the majority of redundancy belongs to a subset of the function calls.
 
-In fact, there's a simple metric to characterize this majority responsibility phenomenon, by generalizing the concept behind [the 80-20 rule](TODO) to arbitrary percentages. Specifically, I now want to ask this question: what percent \(x\) of the most-frequent unique function calls contribute to \(1-x\)% of the total function calls?
+Actually, there's a simple metric to characterize this majority responsibility phenomenon, by generalizing the concept behind [the 80-20 rule](https://en.wikipedia.org/wiki/Pareto_principle) to arbitrary percentages. Specifically, I now want to ask this question: what percent \(x\) of the most-frequent unique function calls contribute to \((1-x)\)% of the total function calls?
 
 ```python
 import numpy as np
 
-def lions_share_percentage(values) -> float:
+def sparsity_factor(values) -> float:
     values = sorted(values)
-    array = np.array([0] + values)
-    array_acc = np.add.accumulate(array)
+    array_acc = np.add.accumulate([0] + values)
     array_acc_percent = array_acc / array_acc[-1]
     equal_acc_percent = np.linspace(0, 1, len(array_acc_percent))[::-1]
     
     index = np.diff(array_acc_percent >= equal_acc_percent).nonzero()
-    return index[0] / len(values)
+    return equal_acc_percent[::-1][index]
 ```
+
+```pycon
+>>> sparsity_factor(counts.values())
+array([0.85815603])
+```
+
+Okay, so ~14.2% of the most-frequent unique function calls account for ~85.8% of the total function calls. In this case it's probably still worth it to cache all of them, given the amount of effort it'd take to single-out the most intensive calls from the others. But this metric gives me a good high-level understanding of the data.
 
 #### the fix
 
-Another upside of using Python is that there are a lot of standard-library-provided solutions to common problems, and caching function calls happens to be one of those problems. For this, Python provides [`functools.lru_cache`](https://docs.python.org/3/library/functools.html#functools.lru_cache), which we can use in our function
+Another one of the upsides of using Python is that there are a lot of standard-library-provided solutions to common problems, and caching function calls happens to be one of those problems. For this, Python provides [`functools.lru_cache`](https://docs.python.org/3/library/functools.html#functools.lru_cache), which we can use in our function. However, to do so there are some refactors we need to make:
+- I don't want the cache to persist after the function has finished. One way to achieve this is to make an inner function `inner`, that:
+  1. is created inside the main function `roll_kdn_drop_high`
+  1. is decorated with `lru_cache`
+  1. is called initially by `roll_kdn_drop_high` with the provided parameters
+  1. is called recursively by itself with the recursing parameters
+  1. goes out of scope and gets garbage-collected (along with its `lru_cache`) on exiting `roll_kdn_drop_high`
+- the \(m = 0\) case should define \(kdn\) recursively as well, so that we get the benefit of caching and reusing each step in the \(kdn\) calculation.
+
+Overall the refactor might look like this:
+
+```python
+def roll_kdn_drop_high(k: int, n: int, m: int) -> SequenceWithOffset:
+    # make sure I don't mix up parameters from inner and outer functions
+    _k, _n, _m = k, n, m
+    del k, n, m
+
+    # Refactor 1: move logic to inner function
+    @functools.lru_cache(max_size=None)
+    def inner(k: int, n: int, m: int):
+        if k == m or n == 1:
+            return SequenceWithOffset(seq=np.array([1], dtype=np.uint64), offset=k-m)
+        if m == 0:
+            # Refactor 2: calculate kdn with explicit recursion
+            if k == 0:
+                return roll_0dn()
+            if k == 1:
+                return roll_1dn(n)
+            return inner(k=1, n=n, m=0).convolve(inner(k=k-1, n=n, m=0))
+
+        result = SequenceWithOffset(seq=np.array([], dtype=np.uint64), offset=0)
+        for i in range(m):
+            sub_dist = inner(k=k-i, n=n-1, m=m-i).copy()
+            sub_dist.seq *= math.comb(k, i)
+            result = result.consolidate(sub_dist)
+
+        for i in range(m, k):
+            sub_dist = inner(k=k-i, n=n-1, m=0).copy()
+            sub_dist.seq *= math.comb(k, i)
+            sub_dist.offset += n * (i - m)
+            result = result.consolidate(sub_dist)
+
+        return result
+
+    return inner(k=_k, n=_n, m=_m)
+```
+
+#### time complexity
+
+The time complexity for this function is a little tricky to calculate, since it's not explicitly clear as to when calls to `inner` actually invoke the defined function, or just pull from the LRU cache. To assess this, we'll have to figure out which calls are made recursively from a given set of starting input parameters \(k, n, m\), evaluate the complexity for each of those first function calls (assuming all sub-calls are cached & accounted for), and aggregate the result into an overall complexity.
+
+*TODO I need to do a better job of explaining how to calculate the complexity here.*
+
+Let's track some of the function calls:
+- \(k\text{d}n \text{ dh}m\) calls:
+  - \(k\text{d}(n-1) \text{ dh}m\)
+  - \((k-1)\text{d}(n-1) \text{ dh}(m-1)\)
+  - ...
+  - \((k-m)\text{d}(n-1) \text{ dh}0 = (k-m)\text{d}(n-1)\)
+  - \((k-m-1)\text{d}(n-1)\)
+  - \((k-m-2)\text{d}(n-1)\)
+  - ...
+  - \(1\text{d}(n-1)\)
+- \(k\text{d}(n-1) \text{ dh}m\) calls all the same as above, but with \((n-2)\)
+- ...
+- \(k\text{d}(n-i) \text{ dh}m\) calls the same as above, but with \((n-i-1)\)
+
+So from this, it seems like the function calls span two specific ranges of parameters:
+1. calling \(k_\text{r} \text{d} n_\text{r} \text{ dh} 0\) for the parameter ranges \(n_\text{r} \in [1, n-1]\) and \(k_\text{r} \in [0, k-m]\)
+    - from the previous section #kdn, we know that calculating \(\{i\text{d}n \ |\  i \in [0, k]\}\) takes \(O(k^2 n^2)\) time
+    - -> calculating \(\{i\text{d}j \ |\  i \in [0, k-m], j \in [0, n-1]\}\) would thus take time:
+      $$
+      \begin{align}
+        O \left( \sum_{j=0}^{n-1} (k-m)^2 j^2 \right)
+        &= O((k-m)^2 n^3) \\
+      \end{align}
+      $$
+1. calling \((k-i) \text{d} n_\text{r} \text{ dh} (m-i)\) for the parameter ranges \(n_\text{r} \in [1, n-1]\) and \(i \in [0, m]\)
+    - we assume that when calculating these, all the sub-distributions have been pre-calculated and cached; technically the cached values would get copied s.t. the cached values aren't altered, and this would take linear time on the array lengths, but they're not getting computed from scratch.
+    - the function loops through \(k-i\) different sub-distributions:
+        - the first \(m-i\) sub-distributions have lengths \(((k-i) - (m-i))(n-2) + 1 = O((k-m) n)\); the function does initialization and element-wise multiplication and addition, so the time to do this work should be linear on the array length, \(O((k-m) n)\)
+        - the total time complexity of that loop should be:
+          $$
+          O \left( \sum_{j=0}^{m-i} (k-m) n \right)
+          = O((m-i) (k-m) n)
+          $$
+        - the last \((k-i) - (m-i) = k-m\) sub-distributions have lengths \((k-i-j)(n-2) + 1 = O((k-i-j)n)\); similarly the function does only linear work here, \(O((k-i-j)n)\)
+        - the total time complexity of that loop should be:
+          $$
+          O \left( \sum_{j=m-i+1}^{k-i} (k-i-j) n \right)
+          = O \left( \sum_{j=0}^{k-m-1} j n \right)
+          = O((k-m)^2 n)
+          $$
+    - doing this for all \(n_\text{r} \in [1, n-1], i \in [0, m]\) would take time:
+      $$
+      \begin{align}
+        &O \left( \sum_{n_r=0}^{n-1} \sum_{i=0}^{m} \left( (m-i) (k-m) n_r + (k-m)^2 n_r \right) \right) \\
+        &= O \left( \left( \sum_{n_r=0}^{n-1} n_r \right) \sum_{i=0}^{m} \left( (m-i) (k-m) + (k-m)^2 \right) \right) \\
+        &= O \left( n^2 \sum_{i=0}^{m} \left( (m-i) (k-m) + (k-m)^2 \right) \right) \\
+        &= O \left( n^2 (k-m) \left( \sum_{i=0}^{m} (m-i) + \sum_{i=0}^{m} (k-m) \right) \right) \\
+        &= O \left( n^2 (k-m) \left( m^2 + m (k-m) \right) \right) \\
+        &= O \left( n^2 (k-m) m \left( \cancel{m} + (k \cancel{-m}) \right) \right) \\
+        &= O \left( n^2 k (k-m) m \right) \\
+      \end{align}
+      $$
+
+Totaling all of this up, the complete time complexity should be:
+
+$$
+\begin{align}
+T_{k\text{d}n \text{ dh}m}
+& = O((k-m)^2 n^3 + k m (k-m) n^2) \\
+m \in [0, k], \text{ max at } m=\frac{k}{2} \rightarrow \ 
+& = O(k^2 n^3 + k^3 n^2) \\
+\end{align}
+$$
 
 ## rolling "..." and dropping the *lowest* dice
 
 While we could repeat the thinking and problem formulation used before for the "drop highest \(m\) dice" case in order to solve the "drop lowest \(m\) dice" case, there is a simpler solution:
 
-- reverse the distribution array of the input *(technically needed for general calculations, but not needed specifically for dice roll distributions)*
+- reverse the distribution array of the input
+  - *(technically this is needed for calculations on generic distributions, but since dice roll distributions are symmetric it's not needed here)*
 - calculate `roll_kdn_drop_high(k, d, m)`
 - reverse the distribution array
 
@@ -651,7 +773,13 @@ And we would get the correct result! But why? It's because there's actually a lo
 
 So imagine if we took the *negative inversion* of our distribution (i.e., \(f_{1d(-n)}(x) = f_{1dn}(-x)\)), where all outcomes instead are comprised of negative numbers (i.e., `2d(-6)` has outcomes like \((-3, -5)\)). It's easy enough to map outcomes & events from `1d(-n)` to `1dn` and vice versa.
 
-Now if we used this inverted distribution to do the same calculation of dropping the "highest" values, it would instead drop the highest *negative* values in `kd(-n)`, which would correspond to the *lowest* values in `kdn`.
+Now if we used this inverted distribution to do the same calculation of dropping the "highest" values, it would instead drop the *highest negative* values in `kd(-n)`, which would correspond to the *lowest positive* values in `kdn`.
+
+Mathematically, we can express the above concept as follows:
+
+$$
+f_{k\text{d}n \text{ drop low }m} (x) = f_{k\text{d}(-n) \text{ drop high }m} (-x)
+$$
 
 In this way, we can reuse `roll_kdn_drop_high(k, d, m)` to calculate `roll_kdn_drop_low(k, d, m)`, without having to reformulate the previous algorithm at all:
 
@@ -662,13 +790,13 @@ def roll_kdn_drop_low(k: int, d: int, m: int):
     return result
 ```
 
-This also takes advantage of some simplifications for the case of dropping highs/lows from `kdn` specifically:
-- since `1dn` always has a symmetric distribution, it doesn't have to be reversed in the first step.
-- the offset doesn't have to change since the range of valid score events (i.e., the offset and the array length) is the same for `kdn drop high m` and `kdn drop low m`.
+Note that the above Python function also takes advantage of some simplifications:
+- for the case of dropping highs/lows from `kdn` specifically, since `1dn` always has a symmetric distribution, it doesn't have to be reversed in the first step.
+- the offset doesn't have to change since the range of valid score events (i.e., the offset and the array length) is the same for `kdn drop high m` and `kdn drop low m`, and doing two reversals leaves the original offset unchanged.
 
 ## refactors for working with generic distributions
 
-After writing Python functions like the ones described in the prior sections, I realized that they could be made even more generic. Specifically, the functions that calculated distributions for repeated rolls (i.e., `roll_kdn`, `roll_kdn_drop_lowest`, etc.) didn't actually rely on any specific features of dice-roll distributions; in fact, they could be reworked to accept a generic distribution parameter and operate directly on that with few changes to the original algorithm.
+After writing Python functions like the ones described in the prior sections, I realized that they could be made even more generic. The functions I wrote that calculated distributions for repeated rolls (i.e., `roll_kdn`, `roll_kdn_drop_lowest`, etc.) didn't actually rely on any specific features of dice-roll distributions; in fact, they could be reworked to accept a generic distribution parameter and operate directly on that with few changes to the original algorithm.
 
 For example, `roll_kdn` was refactored into `roll_k`:
 
@@ -680,29 +808,29 @@ def roll_k(dist: SequenceWithOffset, k: int) -> SequenceWithOffset:
     return result
 ```
 
-TODO - for more specifics, check out [the real source code](https://github.com/CrepeGoat/heart-of-the-dice/blob/v0.1.1/dice/calc.py).
+TODO - hopefully this communicate the gist. For more specifics, check out [the real source code](https://github.com/CrepeGoat/heart-of-the-dice/blob/v0.1.1/dice/calc.py).
 
 These modifications mean that we can calculate arbitrary nestings of repeated distributions with dropped high or low values. For example, calculating the distribution for the sum of rolled stats could be done by running:
 
 ```python
-roll_k(roll_k_drop_lowest(roll_1dn(n=6), k=4, drop=1), k=6)
+roll_k(roll_k_drop_low(roll_1dn(n=6), k=4, drop=1), k=6)
 ```
 
-which wouldn't have been possible to calculate with the pre-factored code.
-
-And with the above change, the calculation functions are effectively feature-complete to calculate any probability result I could want.
+which wouldn't have been possible to calculate with the code before the refactor.
 
 # hath god forsaken me?
 
+And with the above change, the calculation functions are effectively feature-complete to calculate any probability result I could want. So now, it was time for answers.
+
 After writing out this math & code, I opened up a Python interpreter, loaded in the code, and started running some numbers:
 
-```pyconsole
+```pycon
 >>> from dice import calc as dc
 >>> import numpy as np
 ```
 
 - what are the odds of getting the stat sums that I got for my two stat groups?
-  ```pyconsole
+  ```pycon
   >>> sum([17, 5, 14, 14, 15, 9])
   74
   >>> sum([12, 15, 5, 15, 10, 15])
@@ -719,7 +847,7 @@ After writing out this math & code, I opened up a Python interpreter, loaded in 
   -> these are the 55th and 43rd percentiles; both percentiles are within 10% of the median, the center of the distribution, which is quite close. Not lucky, not unlucky.
 
 - what are the chances of rolling a \(5\) or lower for a single stat?
-  ```pyconsole
+  ```pycon
   >>> dc.roll_k_droplow(dc.roll_1dn(6), 4, 1)
   SequenceWithOffset(seq=array([  1,   4,  10,  21,  38,  62,  91, 122, 148, 167, 172, 160, 131,
           94,  54,  21], dtype=uint64), offset=3)
