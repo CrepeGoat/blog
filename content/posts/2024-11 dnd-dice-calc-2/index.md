@@ -58,9 +58,9 @@ Before getting into the math, I need to establish some terminology about probabi
 
 - an [*experiment*](https://en.wikipedia.org/wiki/Experiment_(probability_theory)) is a real-world process, that can be repeated, that has a well-defined set of [*outcomes*](https://en.wikipedia.org/wiki/Outcome_(probability)). E.g., rolling a `d6` is an experiment, and the outcomes are the numbers \(\{(1), (2), (3), (4), (5), (6)\}\).
 - an [*event*](https://en.wikipedia.org/wiki/Event_(probability_theory)) is a collection of any number of outcomes. E.g., rolling an even number on a `d6` is an event, which is a collection of the outcomes \(\{(2), (4), (6)\}\). Rolling the number \(3\) on a `d6` is also an event.
-- a [*probability distribution*](https://en.wikipedia.org/wiki/Probability_distribution) (or in the case of dice rolls specifically, a [*probability mass function (PMF)*](https://en.wikipedia.org/wiki/Probability_mass_function)) is a mathematical function that takes as input a possible outcome / event, and outputs how probable it is for that result to be realized.
+- a [*probability distribution*](https://en.wikipedia.org/wiki/Probability_distribution) (or in the case of dice rolls specifically, a [*probability mass function (PMF)*](https://en.wikipedia.org/wiki/Probability_mass_function)) is a mathematical function that takes as input a possible outcome / event, and outputs how probable it is for that result to occur.
 
-  For example, if a coin had a 55% change to land on heads when flipped (and a 45% of the same for tails), the PMF \(f\) would be defined as:
+  For example, if a coin had a 55% change to land on heads when flipped (and a 45% of the same for tails), the PMF \(f_\text{coin}\) would be defined as:
   $$
   \begin{array}{l}
     f(\text{heads}) := 0.55 \\
@@ -68,6 +68,8 @@ Before getting into the math, I need to establish some terminology about probabi
     f(\text{anything else}) := 0 \\
   \end{array}
   $$
+
+  For the rest of this article, I'm going to denote the density/mass function of a distribution \(d\) as \(f_d\) (e.g., \(f_{2\text{d}6}\)).
 - [convolution](https://en.wikipedia.org/wiki/Convolution) is a mathematical operation that takes as input two N-dimensional arrays of numbers, and as output generates a third N-dimensional array. In this case, we'll use 1D-convolution to [calculate the distribution for the sum of two experiments](https://en.wikipedia.org/wiki/Convolution_of_probability_distributions) (e.g., `2d6` = `1d6` + `1d6`).
 
 ## implementing convolution
@@ -342,26 +344,28 @@ Specifically, I want to separately consider the following partition of events:
     - one of the \(4\)'s is kept in the score
     - the other remaining die kept in the score rolls less than a \(4\), so it is effectively a `d3` 
     - -> the distribution is effectively that of `1d3 + 4`
+    - since there are three orderings for this event group, the resulting outcome counts should be multiplied by 3
 1. exactly one die (i.e., the first, second, or third) rolled a \(4\), and the others rolled any other lower number between \(1\) and \(3\):
     - the \(4\) gets dropped from the score
     - the remaining die roll less than \(4\), so they are both effectively `d3`'s
     - -> the scored result is effectively `2d3`
+    - since there are three orderings for this event group, the resulting outcome counts should be multiplied by 3
 1. the remaining possibilities occur when *none* of the dice are \(4\)'s
     - all dice roll less than \(4\), so they are effectively each a `d3`
     - no dice has been designated to be dropped
     - -> this is effectively the same as `3d3 drop highest`
 
-Note that the 1-die and 2-dice cases each have three unique orderings, while the 0-die and 3-dice cases each have one ordering. More generally, the number of orderings for a given number of fixed high dice \(i\) is [\(k\)-choose-\(i\)](https://en.wikipedia.org/wiki/Binomial_coefficient), or \(k \choose i\).
+Note that the 1-die and 2-dice cases each have three unique orderings, while the 0-die and 3-dice cases each have one ordering. More generally, the number of orderings for a given number of fixed high dice \(i\) is [\(k\)-choose-\(i\)](https://en.wikipedia.org/wiki/Binomial_coefficient), or \(k \choose i\). The respective sub-distribution outcome counts need to be multiplied by these factors to properly account for all outcomes.
 
 Altogether, if we write the OCF of a distribution \(d\) as \(f_d\), then we can recursively express the OCF of `3d4 drop highest` as follows:
 
 $$
 \begin{align}
 f_{3d4 \text{ drop highest}} (x)
-&= {3 \choose 0} f_{8} (x) \\
-    &+ {3 \choose 1} f_{1d3 + 4} (x) \\
-    &+ {3 \choose 2} f_{2d3} (x) \\
-    &+ {3 \choose 3} f_{3d3 \text{ drop highest}} (x)
+=\ \ & {3 \choose 0} f_{8} (x) \\
+    +& {3 \choose 1} f_{1d3 + 4} (x) \\
+    +& {3 \choose 2} f_{2d3} (x) \\
+    +& {3 \choose 3} f_{3d3 \text{ drop highest}} (x)
 \end{align}
 $$
 
@@ -370,9 +374,11 @@ $$
 For the general case of dropping the highest die (specifically for the non-trivial cases, i.e. when there is more than one die \(k > 1\), and the die has multiple outcomes \(n > 1\)), we can formulate an equation similar to the `3d4 drop highest` case:
 
 $$
-f_{kdn \text{ drop highest}} (x) \\
-= {k \choose k} f_{kd(n-1) \text{ drop highest}} (x) \\
-    + \sum_{i \in [0, k-1]} {k \choose i} f_{id(n-1) + n \cdot (k-1 -i)}
+\begin{align}
+f_{kdn \text{ drop highest}} (x)
+=& {k \choose k} f_{kd(n-1) \text{ drop highest}} (x) \\
+&+ \sum_{i \in [0, k-1]} {k \choose i} f_{id(n-1) + n \cdot (k-1 -i)}
+\end{align}
 $$
 
 However, since this is a recursive definition, we have to define the end conditions for each of the decreasing parameters, \(k\) and \(n\):
@@ -755,11 +761,23 @@ Totaling all of this up, the complete time complexity should be:
 $$
 \begin{align}
 T_{k\text{d}n \text{ dh}m}
-& = O((k-m)^2 n^3 + k m (k-m) n^2) \\
-m \in [0, k], \text{ max at } m=\frac{k}{2} \rightarrow \ 
-& = O(k^2 n^3 + k^3 n^2) \\
+& = O \left( (k-m)^2 n^3 + k m (k-m) n^2 \right) \\
+\left( m \in [0, k], \textit{ max at } m=\frac{k}{2} \right) \rightarrow \ 
+& = O \left( k^2 n^3 + k^3 n^2 \right) \\
 \end{align}
 $$
+
+To (partially) verify this derivation, we can show that this is consistent with the \(O(k^2 n^3)\) complexity of our `kdn_drop_highest` function from earlier, which was effectively a special-case of the same algorithm with \(m=1\):
+
+$$
+\begin{align}
+T_{k\text{d}n \text{ dh}1}
+& = O \left( (k-(1))^2 n^3 + k (1) (k-(1)) n^2 \right) \\
+& = O \left( k^2 n^3 + \cancel{k^2 n^2} \right) \\
+& = O \left( k^2 n^3 \right) \\
+\end{align}
+$$
+
 
 ## rolling "..." and dropping the *lowest* dice
 
@@ -799,7 +817,7 @@ Note that the above Python function also takes advantage of some simplifications
 
 After writing Python functions like the ones described in the prior sections, I realized that they could be made even more generic. The functions I wrote that calculated distributions for repeated rolls (i.e., `roll_kdn`, `roll_kdn_drop_lowest`, etc.) didn't actually rely on any specific features of dice-roll distributions; in fact, they could be reworked to accept a generic distribution parameter and operate directly on that with few changes to the original algorithm.
 
-For example, `roll_kdn_drop_high` was refactored into `roll_k_drop_high`:
+For example, `roll_kdn_drop_high` (which effectively demonstrates all of the math presented here) was refactored into `roll_k_drop_high` like so:
 
 ```python
 def roll_k_drop_high(roll_1: SequenceWithOffset, k: int, drop: int):
@@ -848,9 +866,11 @@ roll_k(
 
 which wouldn't have been possible to calculate with the code before the refactor.
 
+In fact, with the above change we can now basically calculate any probability result we could want.
+
 # hath god forsaken me?
 
-And with the above change, the calculation functions are effectively feature-complete to calculate any probability result I could want. So now, it was time for answers.
+So now, it was time for answers.
 
 After writing out this math & code, I opened up a Python interpreter, loaded in the code, and started running some numbers:
 
@@ -874,7 +894,7 @@ After writing out this math & code, I opened up a Python interpreter, loaded in 
   >>> stat_cdist[72 - stat_sum.offset] / stat_cdist[-1]
   np.float64(0.4377304041567714)
   ```
-  -> these are the 55th and 43rd percentiles; both percentiles are within 10% of the median, the center of the distribution, which is quite close. Not lucky, not unlucky.
+  -> these are roughly the 55th and 44th percentiles; both percentiles are within 10% of the median, the center of the distribution, which is quite close. Not lucky, not unlucky.
 
 - what are the chances of rolling a \(5\) or lower for a single stat?
   ```pycon
@@ -885,7 +905,7 @@ After writing out this math & code, I opened up a Python interpreter, loaded in 
   0.011574074074074073
   ```
   -> ~1.16%, or about \(\frac{5}{432}\) *(note that this event has \(1 + 4 + 10 = 15\) outcomes; this is less likely than rolling the highest number, an 18, which has \(21\) outcomes.)*
-- what are the chances of rolling a \(5\) or lower for *any* of the six stats in a stat group?
+- what are the chances of rolling a \(5\) or lower for *one or more* of the six stats in a stat group?
   ```pycon
   >>> p = 15 / (6 ** 4)
   >>> 1 - (1 - p) ** 6
