@@ -70,7 +70,7 @@ Before getting into the math, I need to establish some terminology about probabi
   $$
 
   For the rest of this article, I'm going to denote the density/mass function of a distribution \(d\) as \(f_d\) (e.g., \(f_{2\text{d}6}\)).
-- [convolution](https://en.wikipedia.org/wiki/Convolution) is a mathematical operation that takes as input two N-dimensional arrays of numbers, and as output generates a third N-dimensional array. In this case, we'll use 1D-convolution to [calculate the distribution for the sum of two experiments](https://en.wikipedia.org/wiki/Convolution_of_probability_distributions) (e.g., `2d6` = `1d6` + `1d6`).
+- [convolution](https://en.wikipedia.org/wiki/Convolution) is a mathematical operation that takes as input two N-dimensional arrays of numbers, and as output generates a third N-dimensional array. In this case, we'll use 1D-convolution to [calculate the distribution for the sum of two experiments](https://en.wikipedia.org/wiki/Convolution_of_probability_distributions) (e.g., `1d20 + 1d4`).
 
 ## implementing convolution
 
