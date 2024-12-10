@@ -879,7 +879,29 @@ After writing out this math & code, I opened up a Python interpreter, loaded in 
 >>> import numpy as np
 ```
 
-- what are the odds of getting the stat sums that I got for my two stat groups?
+- *what are the odds of getting the stat sums that I got for my two stat groups?*
+  
+  One way of answering that question is to calculate the [percentile rank](https://en.wikipedia.org/wiki/Percentile_rank) of our results. However since these are discrete mass distributions, we actually can't calculate an exact percentile rank value; we can only calculate a percentile rank range for the discrete bucket that our values fall into.
+
+  Percentile rank ranges can be calculated like so:
+  ```python
+  def percentile_rank_range(
+      dist: SequenceWithOffset,
+      events: list,
+  ) -> list:
+      dist_cumulative = np.zeros(len(dist.seq)+1, dtype=dist.seq.dtype)
+      dist_cumulative[1:] = np.add.accumulate(dist.seq)
+      dist_cumulative = dist_cumulative / dist_cumulative[-1]
+
+      result = []
+      for event in events:
+          event_index = event - dist.offset
+          result.append(dist_cumulative[event_index:event_index+2])
+      return result
+  ```
+
+  ...and applying that to our data:
+
   ```pycon
   >>> sum([17, 5, 14, 14, 15, 9])
   74
@@ -887,16 +909,14 @@ After writing out this math & code, I opened up a Python interpreter, loaded in 
   72
   >>>
   >>> stat_sum = dc.roll_k(dc.roll_k_droplow(dc.roll_1dn(6), k=4, drop=1), k=6)
-  >>> stat_cdist = np.add.accumulate(stat_sum.seq)
-  >>>
-  >>> stat_cdist[74 - stat_sum.offset] / stat_cdist[-1]
-  np.float64(0.5507508601943684)
-  >>> stat_cdist[72 - stat_sum.offset] / stat_cdist[-1]
-  np.float64(0.4377304041567714)
+  >>> percentile_rank_range(stat_sum, [74, 72])
+  [array([0.49402512, 0.55075086]), array([0.38294569, 0.4377304 ])]
   ```
-  -> these are roughly the 55th and 44th percentiles; both percentiles are within 10% of the median, the center of the distribution, which is quite close. Not lucky, not unlucky.
+  -> The first stat group lies between the 49.5- and 55.1-percentiles, which is basically the median, so that feels pretty typical.
 
-- what are the chances of rolling a \(5\) or lower for a single stat?
+  -> The second stat group (the one I chose) lies between the 38.3- and 43.8-percentiles. It's a little on the unlucky side, but not terribly so.
+
+- *what are the chances of rolling a \(5\) or lower for a single stat?*
   ```pycon
   >>> dc.roll_k_droplow(dc.roll_1dn(6), 4, 1)
   SequenceWithOffset(seq=array([  1,   4,  10,  21,  38,  62,  91, 122, 148, 167, 172, 160, 131,
@@ -905,21 +925,21 @@ After writing out this math & code, I opened up a Python interpreter, loaded in 
   0.011574074074074073
   ```
   -> ~1.16%, or about \(\frac{5}{432}\) *(note that this event has \(1 + 4 + 10 = 15\) outcomes; this is less likely than rolling the highest number, an 18, which has \(21\) outcomes.)*
-- what are the chances of rolling a \(5\) or lower for *one or more* of the six stats in a stat group?
+- *what are the chances of rolling a \(5\) or lower for one or more of the six stats in a stat group?*
   ```pycon
   >>> p = 15 / (6 ** 4)
   >>> 1 - (1 - p) ** 6
   0.06746579772408667
   ```
   -> ~6.75%, about \(\frac{5}{74}\)
-- what are the chances of rolling a \(5\) or lower *in both stat groups*?
+- *what are the chances of rolling a \(5\) or lower for one or more stats in both stat groups?*
   ```pycon
   >>> p_g = 1 - (1 - p) ** 6
   >>> p_g ** 2
   0.004551633862547378
   ```
   **-> ~0.455%**, about \(\frac{1}{219}\)
-- how unlucky is that compared to rolling a 1 with advantage?
+- *how unlucky is that compared to rolling a 1 with advantage?*
   ```pycon
   >>> d20_adv = dc.roll_k_droplow(dc.roll_1dn(20), k=2, drop=1)
   >>> d20_adv.seq / (20 ** 2)
@@ -927,6 +947,6 @@ After writing out this math & code, I opened up a Python interpreter, loaded in 
          0.0425, 0.0475, 0.0525, 0.0575, 0.0625, 0.0675, 0.0725, 0.0775,
          0.0825, 0.0875, 0.0925, 0.0975])
   ```
-  -> rolling a 5 for both stat blocks is not as bad as crit-failing with advantage (0.25%, \(\frac{1}{400}\)), but is worse than rolling a 2 with advantage (0.75%, \(\frac{3}{400}\)), which is pretty bad.
+  -> Rolling a 5 for both stat blocks is not as bad as crit-failing with advantage (0.25%, \(\frac{1}{400}\)), but is worse than rolling a 2 with advantage (0.75%, \(\frac{3}{400}\)), which is pretty bad.
 
 ...god dammit.
