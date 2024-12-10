@@ -1,5 +1,5 @@
 ---
-title: "D&D Dice Calculator - Math & Misfortune"
+title: "D&D Dice Calculator pt. 2 - Math & Misfortune"
 author: me
 date: 2024-12-07T21:24:00-07:00
 draft: false
